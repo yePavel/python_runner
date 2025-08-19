@@ -174,18 +174,18 @@ class DynamicForm(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Python Script Runner")
+        self.setWindowTitle("Main Runner")
         self.resize(980, 640)
         self.setWindowIcon(QIcon())
 
-        # Toolbar
-        tb = QToolBar("Main")
-        tb.setIconSize(QSize(18, 18))
-        self.addToolBar(tb)
+        # Toolbar - optinal, can be remove if not needed
+        # tb = QToolBar("Main")
+        # tb.setIconSize(QSize(18, 18))
+        # self.addToolBar(tb)
 
-        act_open = QAction("Choose log file", self)
-        act_open.triggered.connect(self.choose_log_file)
-        tb.addAction(act_open)
+        # act_open = QAction("Choose log file", self)
+        # act_open.triggered.connect(self.choose_log_file)
+        # tb.addAction(act_open)
 
         # Central layout
         central = QWidget()
