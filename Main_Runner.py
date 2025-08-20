@@ -1,4 +1,4 @@
-# runner_gui.py
+# Main_Runner.py
 import sys
 import os
 import re
@@ -35,8 +35,8 @@ SCRIPTS: List[Dict[str, Any]] = [
         "path": "add_numbers.py",
         "args_schema": [
             {"key": "--user", "label": "User", "type": "text", "required": True, "placeholder": "e.g. Pavel"},
-            {"key": "--a", "label": "first number", "type": "int", "required": True, "min": -1_000_000, "max": 1_000_000},
-            {"key": "--b", "label": "second number", "type": "int", "required": True, "min": -1_000_000, "max": 1_000_000},
+            {"key": "--first", "label": "first number", "type": "int", "required": True, "min": -1_000_000, "max": 1_000_000},
+            {"key": "--second", "label": "second number", "type": "int", "required": True, "min": -1_000_000, "max": 1_000_000},
             # {"key": "--threshold", "label": "Threshold", "type": "int", "required": False, "default": 50, "min": 0, "max": 100},
             # {"key": "--mode", "label": "Mode", "type": "select", "required": True, "options": ["fast", "accurate"]},
             # {"key": "--dry-run", "label": "Dry run", "type": "checkbox", "required": False, "default": False},
