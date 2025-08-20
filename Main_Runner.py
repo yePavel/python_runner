@@ -5,7 +5,7 @@ import re
 from typing import List, Optional, Dict, Any
 
 from PySide6.QtCore import Qt, QSize, Slot
-from PySide6.QtGui import QIcon, QAction
+from PySide6.QtGui import QIcon, QAction, QTextCursor
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QFileDialog, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QListWidget, QListWidgetItem, QFormLayout, QLineEdit,
@@ -31,13 +31,15 @@ Field schema (per script):
 
 SCRIPTS: List[Dict[str, Any]] = [
     {
-        "name": "Script A",
-        "path": "script_a.py",
+        "name": "Add numbers",
+        "path": "add_numbers.py",
         "args_schema": [
-            {"key": "--user", "label": "User", "type": "text", "required": True, "placeholder": "e.g. alice"},
-            {"key": "--threshold", "label": "Threshold", "type": "int", "required": False, "default": 50, "min": 0, "max": 100},
-            {"key": "--mode", "label": "Mode", "type": "select", "required": True, "options": ["fast", "accurate"]},
-            {"key": "--dry-run", "label": "Dry run", "type": "checkbox", "required": False, "default": False},
+            {"key": "--user", "label": "User", "type": "text", "required": True, "placeholder": "e.g. Pavel"},
+            {"key": "--a", "label": "first number", "type": "int", "required": True, "min": -1_000_000, "max": 1_000_000},
+            {"key": "--b", "label": "second number", "type": "int", "required": True, "min": -1_000_000, "max": 1_000_000},
+            # {"key": "--threshold", "label": "Threshold", "type": "int", "required": False, "default": 50, "min": 0, "max": 100},
+            # {"key": "--mode", "label": "Mode", "type": "select", "required": True, "options": ["fast", "accurate"]},
+            # {"key": "--dry-run", "label": "Dry run", "type": "checkbox", "required": False, "default": False},
         ],
         # how to pass the log file: "--log <path>" or positional
         "log_arg_style": "--log"
@@ -352,9 +354,9 @@ class MainWindow(QMainWindow):
         data = self.proc.readAllStandardOutput().data().decode(errors="replace")
         if not data:
             return
-        self.txt_log.moveCursor(self.txt_log.textCursor().End)
+        self.txt_log.moveCursor(QTextCursor.End)
         self.txt_log.insertPlainText(data)
-        self.txt_log.moveCursor(self.txt_log.textCursor().End)
+        self.txt_log.moveCursor(QTextCursor.End)
 
         # Detect "PROGRESS <0..100>"
         for line in data.splitlines():
@@ -398,9 +400,9 @@ class MainWindow(QMainWindow):
         self.list_scripts.setEnabled(True)
 
     def append_log(self, text: str):
-        self.txt_log.moveCursor(self.txt_log.textCursor().End)
+        self.txt_log.moveCursor(QTextCursor.End)
         self.txt_log.insertPlainText(text)
-        self.txt_log.moveCursor(self.txt_log.textCursor().End)
+        self.txt_log.moveCursor(QTextCursor.End)
 
     def set_status(self, text: str):
         self.lbl_status.setText(text)
