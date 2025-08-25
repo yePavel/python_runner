@@ -91,7 +91,20 @@ SCRIPTS: List[Dict[str, Any]] = [
         {"key": "--log", "label": "Log path", "type": "text", "required": False}
     ],
     "log_arg_style": "--log"
+    },
+    {
+    "name": "Parser Tester",
+    "path": "test_parser_output.py",
+    "clue": "Emits PROGRESS, error/traceback lines, and optional stderr for highlighting tests.",
+    "args_schema": [
+        {"key": "--steps", "label": "Steps", "type": "int", "required": False, "default": 10, "min": 1, "max": 100},
+        {"key": "--delay", "label": "Delay (sec)", "type": "float", "required": False, "default": 0.25, "min": 0.0, "max": 5.0, "step": 0.05},
+        {"key": "--stderr", "label": "Emit stderr", "type": "checkbox", "required": False, "default": True},
+        {"key": "--fail", "label": "Emit traceback", "type": "checkbox", "required": False, "default": False}
+    ],
+    "log_arg_style": "--log"
 }
+
 ]
 
 # ---------- Dynamic form ----------
