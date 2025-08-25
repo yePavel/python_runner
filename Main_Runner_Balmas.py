@@ -50,11 +50,11 @@ SCRIPTS: List[Dict[str, Any]] = [
         "path": "find_family_ids.py",
         "args_schema": [
             # {"key": "--user", "label": "User", "type": "text", "required": False, "placeholder": "e.g. Pavel"},
-            {"key": "--", "label": "", "type": "string", "required": True},
-            {"key": "--", "label": "Input Log", "type": "file_open",
+            {"key": "--find_family", "label": "ids", "type": "string", "required": True},
+            {"key": "--inputlog", "label": "Input Log", "type": "file_open",
             "required": False, "filter": "Log/Text (*.log *.txt);;All Files (*)",
             "dialog_title": "Choose additional log file"},
-            {"key": "--", "label": " ", "type": "checkbox", "required": False, "default": False},
+            {"key": "--SN", "label": "SN", "type": "checkbox", "required": False, "default": False},
         ],
         "log_arg_style": "--log"
     },
@@ -63,18 +63,18 @@ SCRIPTS: List[Dict[str, Any]] = [
         "path": "limit2ids.py",
         "args_schema": [
             # {"key": "--user", "label": "User", "type": "text", "required": False, "placeholder": "e.g. Pavel"},
-            {"key": "--", "label": "", "type": "string", "required": True},
-            {"key": "--", "label": " ", "type": "file_open",
+            {"key": "--Limit2ids", "label": "ids", "type": "string", "required": True},
+            {"key": "--outlog", "label": "out log", "type": "file_open",
             "required": False, "filter": "Log/Text (*.log *.txt);;All Files (*)",
             "dialog_title": "Choose additional log file"},
-            {"key": "--", "label": " ", "type": "file_open",
+            {"key": "--hy", "label": "hy", "type": "file_open",
             "required": False, "filter": "Log/Text (*.log *.txt);;All Files (*)",
             "dialog_title": "Choose additional log file"},
         ],
         "log_arg_style": "--log"
     },
     {
-        "name": "  ",
+        "name": "merge_logs",
         "path": "",
         "args_schema": [
             # {"key": "--user", "label": "User", "type": "text", "required": False, "placeholder": "e.g. Pavel"}
@@ -249,7 +249,7 @@ class MainWindow(QMainWindow):
         self.resize(980, 640)
         self.setWindowIcon(QIcon())
 
-        # Theme button (sun/moon)
+        # define adding Theme button (sun/moon)
         self.theme_is_dark = False
         self.btn_theme = QPushButton()
         self.btn_theme.setText("☀️")  # Sun icon
@@ -257,19 +257,28 @@ class MainWindow(QMainWindow):
         self.btn_theme.setFixedSize(45, 45)
         self.btn_theme.clicked.connect(self.toggle_theme)
 
-        # Add Clear Button
+        # define adding Clear Button
         self.act_clear = QPushButton()
         self.act_clear.setText("🧹")  # Clear icon
         self.act_clear.setToolTip("Clear All")
         self.act_clear.setFixedSize(45, 45)
         self.act_clear.clicked.connect(self.clear_all)
 
-        # Add theme button to toolbar or layout
+        # define adding Paste from Log Button to toolbar
+        self.btn_paste_raw = QPushButton("Paste from Log")
+        self.btn_paste_raw.setText("©")  # Clear icon
+        self.btn_paste_raw.setToolTip("Paste selected log text into form")
+        self.btn_paste_raw.setFixedSize(45, 45)
+        self.btn_paste_raw.clicked.connect(self.paste_from_log_selection)
+        
+        # Actual addWidget theme to toolbar
         tb = QToolBar("Main")
         tb.setIconSize(QSize(18, 18))
         self.addToolBar(tb)
         tb.addWidget(self.btn_theme)
         tb.addWidget(self.act_clear)
+        tb.addWidget(self.btn_paste_raw)
+
 
         # Central layout
         central = QWidget()
@@ -287,7 +296,7 @@ class MainWindow(QMainWindow):
         self.file_box = QGroupBox("Main Path")
         file_layout = QHBoxLayout(self.file_box)
 
-        self.lbl_log = QLabel("No file selected")
+        self.lbl_log = QLabel("No file Selected")
         self.log_mode = QComboBox()
 
         self.log_mode.addItems(["File","Folder"])
@@ -352,12 +361,6 @@ class MainWindow(QMainWindow):
         self.log_file_path: Optional[str] = None
         self.proc = None  # QProcess instance
 
-        paste_row = QHBoxLayout()
-        self.btn_paste_raw = QPushButton("Paste from Log")
-        self.btn_paste_raw.clicked.connect(self.paste_from_log_selection)
-        paste_row.addWidget(self.btn_paste_raw)
-        form_layout.addLayout(paste_row)
-
         if SCRIPTS:
             self.list_scripts.setCurrentRow(0)
 
@@ -375,7 +378,7 @@ class MainWindow(QMainWindow):
                 QListWidget { background: #2b2f3a; border: 1px solid #3a3d46; }
                 QTextEdit { background: #111217; border: 1px solid #3a3d46; }
                 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox { background: #2b2f3a; border: 1px solid #3a3d46; color: #f0f0f0; padding: 4px; }
-                QProgressBar { background: #2b2f3a; border: 1px solid #3a3d46; border-radius: 3px; text-align: center; }
+                QProgressBar { background: #2b2f3a; border: 1px solid #3a3d46; border-radius: 3px; text-align: center; color: #f0f0f0; }
                 QProgressBar::chunk { background-color: #4c8bf5; }
             """)
             self.btn_theme.setText("🌞")  # Sun icon
@@ -390,7 +393,7 @@ class MainWindow(QMainWindow):
                 QListWidget { background: #fff; border: 1px solid #ccc; }
                 QTextEdit { background: #f4f4f4; border: 1px solid #ccc; }
                 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox { background: #fff; border: 1px solid #ccc; color: #222; padding: 4px; }
-                QProgressBar { background: #fff; border: 1px solid #ccc; border-radius: 3px; text-align: center; }
+                QProgressBar { background: #fff; border: 1px solid #ccc; border-radius: 3px; text-align: center; color: #222; }
                 QProgressBar::chunk { background-color: #4c8bf5; }
             """)
             self.btn_theme.setText("🌙")  # Moon icon
