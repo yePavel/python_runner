@@ -4,7 +4,7 @@ import os
 import re
 from typing import List, Optional, Dict, Any
 
-from PySide6.QtCore import Qt, QSize, Slot
+from PySide6.QtCore import Qt, QSize, Slot, QEvent,QProcess
 from PySide6.QtGui import QIcon, QAction, QTextCursor
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QFileDialog, QHBoxLayout, QVBoxLayout,
@@ -103,6 +103,7 @@ class DynamicForm(QWidget):
         self.form = QFormLayout(self)
         self.form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         self.bindings: List[Dict[str, Any]] = []  # each: {"schema":..., "widget":...}
+            
 
     def clear(self):
         while self.form.rowCount():
@@ -230,7 +231,8 @@ class FilePicker(QWidget):
         self.mode = mode
         self.dialog_title = dialog_title
         self.name_filter = name_filter
-
+        self.setAcceptDrops(True)
+        
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         self.le = QLineEdit(self)
@@ -251,6 +253,24 @@ class FilePicker(QWidget):
     def text(self) -> str:
         return self.le.text().strip()
     
+    # Handeling drag and drop in the parameters section
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+    
+    def dropEvent(self, event):
+        urls = event.mimeData().urls()
+        if not urls:
+            return
+        file_path = urls[0].toLocalFile()
+        self.le.setText(file_path)
+        # Optionally, show a status message in the main window
+        mw = self.window()
+        if hasattr(mw, "set_status"):
+            mw.set_status(f"File dropped: {os.path.basename(file_path)}")
+    
 # ---------- Main window ----------
 
 class MainWindow(QMainWindow):
@@ -259,7 +279,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Main Runner")
         self.resize(980, 640)
         self.setWindowIcon(QIcon())
-
+        
         # define adding Theme button (sun/moon)
         self.theme_is_dark = False
         self.btn_theme = QPushButton()
@@ -302,18 +322,23 @@ class MainWindow(QMainWindow):
 
 
         # Main path selector
-
         self.log_is_dir = False
         self.file_box = QGroupBox("Main Path")
         file_layout = QHBoxLayout(self.file_box)
-
+        self.file_box.setAcceptDrops(True)
+        self.file_box.installEventFilter(self)
+        
         self.lbl_log = QLabel("No file Selected")
+        self.lbl_log.setAcceptDrops(True)
+        self.lbl_log.installEventFilter(self)
+        
         self.log_mode = QComboBox()
-
         self.log_mode.addItems(["File","Folder"])
         self.log_mode.setCurrentText("File")
+        self.log_mode.setAcceptDrops(True)
+        self.log_mode.installEventFilter(self)
         self.log_mode.currentTextChanged.connect(self.on_log_mode_changed)
-
+        
         btn_browse = QPushButton("Browse…")
         btn_browse.clicked.connect(self.choose_log_file)
 
@@ -469,6 +494,49 @@ class MainWindow(QMainWindow):
         self.theme_is_dark = not self.theme_is_dark
         self.apply_theme()
 
+    def eventFilter(self, obj, event):
+        targets = (self.file_box, self.lbl_log, self.log_mode, getattr(self, "btn_browse", None))
+        if obj in targets:
+            et = event.type()
+
+            if et == QEvent.DragEnter:
+                if event.mimeData().hasUrls():
+                    event.acceptProposedAction() 
+                    self.file_box.setStyleSheet("QGroupBox { border: 2px dashed #4c8bf5; border-radius: 6px; }")
+                    return True
+                return False
+
+            if et == QEvent.DragMove:
+                if event.mimeData().hasUrls():
+                    event.acceptProposedAction()
+                    return True
+                return False
+
+            if et == QEvent.DragLeave:
+                self.file_box.setStyleSheet("")  
+                return True
+
+            if et == QEvent.Drop:
+                urls = event.mimeData().urls()
+                self.file_box.setStyleSheet("")
+                if not urls:
+                    return False
+                path = urls[0].toLocalFile()
+
+                if self.log_is_dir: 
+                    self.log_file_path = path if os.path.isdir(path) else os.path.dirname(path)
+                else:
+                    self.log_file_path = path
+
+                base = os.path.basename(self.log_file_path.rstrip("/\\")) or self.log_file_path
+                self.lbl_log.setText(base)
+                self.set_status(f"Main Path set: {base}")
+                event.acceptProposedAction()
+                return True
+
+        return super().eventFilter(obj, event)
+            
+            
     # ---------- UI actions ----------
 
     @Slot()
@@ -535,7 +603,6 @@ class MainWindow(QMainWindow):
         self.start_process(args)
 
     def start_process(self, args: List[str]):
-        from PySide6.QtCore import QProcess
 
         self.txt_log.clear()
         self.progress.setValue(0)
