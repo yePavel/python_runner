@@ -17,7 +17,7 @@ def main():
     # Simulate work with progress updates
     for p in range(0, 101, 10):
         print(f"PROGRESS {p}%")  # GUI catches this
-        print(f"Working... step {p//20+1}")
+        
         sys.stdout.flush()
         time.sleep(0.5)
 

@@ -365,6 +365,14 @@ class MainWindow(QMainWindow):
         scripts_layout.addWidget(self.list_scripts)
         left_panel.addWidget(scripts_box, 1)
 
+        # Recent runs list
+        recent_box = QGroupBox("Recent Runs")
+        recent_layout = QVBoxLayout(recent_box)
+        self.list_recent = QListWidget()
+        self.list_recent.itemDoubleClicked.connect(self.on_recent_run)
+        recent_layout.addWidget(self.list_recent)
+        left_panel.addWidget(recent_box, 1)
+        
         run_row = QHBoxLayout()
         self.btn_run = QPushButton("Run")
         self.btn_run.clicked.connect(self.on_run_clicked)
@@ -410,6 +418,7 @@ class MainWindow(QMainWindow):
         self.current_script: Optional[Dict[str, Any]] = None
         self.log_file_path: Optional[str] = None
         self.proc = None  # QProcess instance
+        self.recent_runs: List[Dict[str, Any]] = []
 
         if SCRIPTS:
             self.list_scripts.setCurrentRow(0)
@@ -620,6 +629,7 @@ class MainWindow(QMainWindow):
         if not os.path.exists(script_path):
             self.show_message("Missing script", "Script is missing in the given directory",QMessageBox.Warning)
 
+        self.add_recent_run(self.current_script, args)
         self.start_process(args)
 
     def start_process(self, args: List[str]):
@@ -680,6 +690,24 @@ class MainWindow(QMainWindow):
         if self.progress.maximum() == 0:
             self.progress.setRange(0, 100)
         self.set_status("Error")
+
+    def add_recent_run(self, script: Dict[str, Any], args: List[str]):
+        """Store and display the most recently executed script and its arguments."""
+        display = f"{script.get('name', '')} {' '.join(args[1:])}"
+        self.recent_runs = [r for r in self.recent_runs if r.get('display') != display]
+        self.recent_runs.insert(0, {'display': display, 'args': args[:]})
+        if len(self.recent_runs) > 10:
+            self.recent_runs.pop()
+        self.list_recent.clear()
+        for r in self.recent_runs:
+            self.list_recent.addItem(r['display'])
+
+    def on_recent_run(self, item):
+        """Double-click handler to rerun a previously executed script."""
+        row = self.list_recent.row(item)
+        if 0 <= row < len(self.recent_runs):
+            args = self.recent_runs[row]['args']
+            self.start_process(args)
 
     @Slot()
     def on_cancel(self):
