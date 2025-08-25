@@ -535,7 +535,27 @@ class MainWindow(QMainWindow):
                 return True
 
         return super().eventFilter(obj, event)
-            
+    
+    def show_message(self, title, text, icon=QMessageBox.Information):
+        msg = QMessageBox(self)
+        msg.setWindowTitle(title)
+        msg.setText(text)
+        msg.setIcon(icon)
+        if self.theme_is_dark:
+            msg.setStyleSheet("""
+                QMessageBox {
+                    background-color: #232323;
+                    color: #f0f0f0;
+                }
+                QLabel {
+                    color: #f0f0f0;
+                }
+                QPushButton {
+                    background-color: #444;
+                    color: #f0f0f0;
+                }
+            """)
+        msg.exec()
             
     # ---------- UI actions ----------
 
@@ -574,14 +594,14 @@ class MainWindow(QMainWindow):
     @Slot()
     def on_run_clicked(self):
         if not self.log_file_path:
-            QMessageBox.warning(self, "Missing file", "Please choose a log file.")
+            self.show_message("Missing file", "Please choose a log file.",QMessageBox.Warning)
             return
         if not self.current_script:
-            QMessageBox.warning(self, "Missing script", "Please select a script.")
+            self.show_message("Missing script", "Please select a script.",QMessageBox.Warning)
             return
         errors = self.form.validate_and_collect()
         if errors:
-            QMessageBox.warning(self, "Validation", "\n".join(errors))
+            self.show_message("Validation", "\n".join(errors))
             return
 
         script_path = self.current_script["path"]
@@ -598,7 +618,7 @@ class MainWindow(QMainWindow):
         args.extend(["--mode","gui"])
 
         if not os.path.exists(script_path):
-            QMessageBox.warning(self, "Missing script", "Script is missing in the given directory")
+            self.show_message("Missing script", "Script is missing in the given directory",QMessageBox.Warning)
 
         self.start_process(args)
 
@@ -730,7 +750,7 @@ class MainWindow(QMainWindow):
                 widget.setValue(int(float(t)))
                 return True
             except Exception:
-                QMessageBox.warning(self, "Paste failed", "Selected text is not an integer.")
+                self.show_message("Paste failed", "Selected text is not an integer.",QMessageBox.Warning)
                 return False
 
         if isinstance(widget, QDoubleSpinBox):
@@ -738,7 +758,7 @@ class MainWindow(QMainWindow):
                 widget.setValue(float(t))
                 return True
             except Exception:
-                QMessageBox.warning(self, "Paste failed", "Selected text is not a number.")
+                self.show_message("Paste failed", "Selected text is not a number.",QMessageBox.Warning)
                 return False
 
         if isinstance(widget, QComboBox):
@@ -751,7 +771,7 @@ class MainWindow(QMainWindow):
             if widget.isEditable():
                 widget.setEditText(t)
                 return True
-            QMessageBox.warning(self, "Paste failed", f"'{t}' is not an available option.")
+            self.show_message("Paste failed", f"'{t}' is not an available option.",QMessageBox.Warning)
             return False
 
         if isinstance(widget, QCheckBox):
@@ -825,7 +845,7 @@ class MainWindow(QMainWindow):
         
         target = self._focused_form_widget() or self._fallback_required_widget()
         if not target:
-            QMessageBox.warning(self, "No target field", "Focus a form field to paste into.")
+            self.show_message("No target field", "Focus a form field to paste into.",QMessageBox.Warning)
             return
         
         if self._set_widget_value(target, raw):
