@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QFileDialog, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QListWidget, QListWidgetItem, QFormLayout, QLineEdit,
     QSpinBox, QDoubleSpinBox, QComboBox, QCheckBox, QTextEdit, QGroupBox,
-    QProgressBar, QMessageBox, QToolBar
+    QProgressBar, QMessageBox, QToolBar, QToolTip
 )
 
 PYTHON = sys.executable  # use same interpreter
@@ -48,6 +48,7 @@ SCRIPTS: List[Dict[str, Any]] = [
     {
         "name": "Find Family",
         "path": "find_family_ids.py",
+        "clue": "Finds family IDs from the input log file",
         "args_schema": [
             # {"key": "--user", "label": "User", "type": "text", "required": False, "placeholder": "e.g. Pavel"},
             {"key": "--find_family", "label": "ids", "type": "string", "required": True},
@@ -61,6 +62,7 @@ SCRIPTS: List[Dict[str, Any]] = [
     {
         "name": "Limit2ids",
         "path": "limit2ids.py",
+        "clue": "Cut the log file by the given ids",
         "args_schema": [
             # {"key": "--user", "label": "User", "type": "text", "required": False, "placeholder": "e.g. Pavel"},
             {"key": "--Limit2ids", "label": "ids", "type": "string", "required": True},
@@ -75,12 +77,21 @@ SCRIPTS: List[Dict[str, Any]] = [
     },
     {
         "name": "merge_logs",
-        "path": "",
+        "path": "merge_logs.py",
+        "clue": "Merge input logs by given directory path",
         "args_schema": [
             # {"key": "--user", "label": "User", "type": "text", "required": False, "placeholder": "e.g. Pavel"}
         ],
         "log_arg_style": "--log"
-    }
+    },
+    {
+    "name": "Test Script",
+    "path": "Example.py",
+    "args_schema": [
+        {"key": "--log", "label": "Log path", "type": "text", "required": False}
+    ],
+    "log_arg_style": "--log"
+}
 ]
 
 # ---------- Dynamic form ----------
@@ -266,7 +277,7 @@ class MainWindow(QMainWindow):
 
         # define adding Paste from Log Button to toolbar
         self.btn_paste_raw = QPushButton("Paste from Log")
-        self.btn_paste_raw.setText("©")  # Clear icon
+        self.btn_paste_raw.setText("📝")  # Clear icon
         self.btn_paste_raw.setToolTip("Paste selected log text into form")
         self.btn_paste_raw.setFixedSize(45, 45)
         self.btn_paste_raw.clicked.connect(self.paste_from_log_selection)
@@ -315,6 +326,14 @@ class MainWindow(QMainWindow):
         scripts_box = QGroupBox("Scripts")
         scripts_layout = QVBoxLayout(scripts_box)
         self.list_scripts = QListWidget()
+        
+        # Adding clue button to see script description
+        self.btn_clue = QPushButton("❓")
+        self.btn_clue.setToolTip("Show script description")
+        self.btn_clue.setFixedSize(30, 30)
+        self.btn_clue.clicked.connect(self.show_script_clue)
+        scripts_layout.addWidget(self.btn_clue)
+        
         for s in SCRIPTS:
             self.list_scripts.addItem(QListWidgetItem(s["name"]))
         self.list_scripts.currentRowChanged.connect(self.on_script_change)
@@ -324,9 +343,15 @@ class MainWindow(QMainWindow):
         run_row = QHBoxLayout()
         self.btn_run = QPushButton("Run")
         self.btn_run.clicked.connect(self.on_run_clicked)
+        self.btn_run.setObjectName("RunButton")
+        self.btn_run.setMinimumSize(90, 40)
+        
         self.btn_cancel = QPushButton("Cancel")
+        self.btn_cancel.setObjectName("CancelButton")
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.clicked.connect(self.on_cancel)
+        self.btn_cancel.setMinimumSize(90, 40)
+        
         run_row.addWidget(self.btn_run)
         run_row.addWidget(self.btn_cancel)
         left_panel.addLayout(run_row)
@@ -373,14 +398,35 @@ class MainWindow(QMainWindow):
                 QLabel, QGroupBox, QListWidget, QTextEdit { color: #f0f0f0; }
                 QGroupBox { border: 1px solid #3a3d46; border-radius: 6px; margin-top: 12px; }
                 QGroupBox::title { subcontrol-origin: margin; left: 9px; padding: 0 3px; }
-                QPushButton { margin: 2px; background: qlineargradient(x1:0, y1:0, x2:0,y2:1, stop:0 #555555, stop:1 #333333); border: 1px solid #3a3d46; padding: 6px 12px; border-radius: 4px; color: #E0E0E0; }
+                QPushButton { margin: 2px; background: qlineargradient(x1:0, y1:0, x2:0,y2:1, stop:0 #555555, stop:1 #333333); border: 1px solid #3a3d46; padding: 4px 4px; border-radius: 4px; color: #E0E0E0; }
                 QPushButton:hover { background: #3a3f4d; }
                 QListWidget { background: #2b2f3a; border: 1px solid #3a3d46; }
                 QTextEdit { background: #111217; border: 1px solid #3a3d46; }
                 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox { background: #2b2f3a; border: 1px solid #3a3d46; color: #f0f0f0; padding: 4px; }
                 QProgressBar { background: #2b2f3a; border: 1px solid #3a3d46; border-radius: 3px; text-align: center; color: #f0f0f0; }
                 QProgressBar::chunk { background-color: #4c8bf5; }
-            """)
+                
+                QPushButton#RunButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #0D0D0D, stop:1 #1B5E20);
+                    color: #FFFFFF;
+                    border: 1px solid #2E7D32;
+                    }
+                QPushButton#RunButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #1B5E20, stop:1 #2E7D32);
+                    }
+                QPushButton#CancelButton {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #0D0D0D, stop:1 #7F0000); 
+                    color: #FFFFFF;
+                    border: 1px solid #B71C1C;
+                    }
+                QPushButton#CancelButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #7F0000, stop:1 #B71C1C);
+                    }
+                """)
             self.btn_theme.setText("🌞")  # Sun icon
         else:
             self.setStyleSheet("""
@@ -388,14 +434,35 @@ class MainWindow(QMainWindow):
                 QLabel, QGroupBox, QListWidget, QTextEdit { color: #222; }
                 QGroupBox { border: 1px solid #ccc; border-radius: 6px; margin-top: 12px; }
                 QGroupBox::title { subcontrol-origin: margin; left: 9px; padding: 0 3px; }
-                QPushButton { margin: 2px; background: qlineargradient(x1:0, y1:0, x2:0,y2:1, stop:0 #F5F5F5, stop:1 #ADADAD); border: 1px solid #ccc; padding: 6px 12px; border-radius: 4px; }
+                QPushButton { margin: 2px; background: qlineargradient(x1:0, y1:0, x2:0,y2:1, stop:0 #F5F5F5, stop:1 #ADADAD); border: 1px solid #ccc; padding: 4px 4px; border-radius: 4px; }
                 QPushButton:hover { background: #eaeaea; }
                 QListWidget { background: #fff; border: 1px solid #ccc; }
                 QTextEdit { background: #f4f4f4; border: 1px solid #ccc; }
                 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox { background: #fff; border: 1px solid #ccc; color: #222; padding: 4px; }
                 QProgressBar { background: #fff; border: 1px solid #ccc; border-radius: 3px; text-align: center; color: #222; }
                 QProgressBar::chunk { background-color: #4c8bf5; }
-            """)
+                
+                QPushButton#RunButton {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #f8fff8, stop:1 #e0ffe0);
+                    color: #222;
+                    border: 1px solid #b2dfdb;
+                }
+                QPushButton#RunButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #e0ffe0, stop:1 #c8f7c8);
+                }
+                QPushButton#CancelButton {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #fff8f8, stop:1 #ffe0e0);
+                    color: #222;
+                    border: 1px solid #ef9a9a;
+                }
+                QPushButton#CancelButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #ffe0e0, stop:1 #ffcccc);
+                }
+                """)
             self.btn_theme.setText("🌙")  # Moon icon
 
     def toggle_theme(self):
@@ -463,7 +530,7 @@ class MainWindow(QMainWindow):
         args.extend(["--mode","gui"])
 
         if not os.path.exists(script_path):
-            QMessageBox.warning(self, "Missing script", "Script ERROR, ask Pavel what to do :) .")
+            QMessageBox.warning(self, "Missing script", "Script is missing in the given directory")
 
         self.start_process(args)
 
@@ -546,6 +613,15 @@ class MainWindow(QMainWindow):
     def set_status(self, text: str):
         self.lbl_status.setText(text)
 
+    def show_script_clue(self):
+        row = self.list_scripts.currentRow()
+        if row < 0 or row >= len(SCRIPTS):
+            clue = "No script selected."
+        else:
+            clue = SCRIPTS[row].get("clue", "No clue available.")
+        # Show tooltip near the clue button
+        QToolTip.showText(self.btn_clue.mapToGlobal(self.btn_clue.rect().bottomLeft()), clue, self.btn_clue)
+    
     # Add copy - paste option
     def _normalize_selected_text(self, text: str) -> str:
         # In Qt, selectedText() replaces line breaks with U+2029 (paragraph separator)
