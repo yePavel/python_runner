@@ -336,7 +336,7 @@ class MainWindow(QMainWindow):
 
         # Main path selector
         self.log_is_dir = False
-        self.file_box = QGroupBox("Main Path")
+        self.file_box = QGroupBox("Main Path (Darg & Drop supported)")
         file_layout = QHBoxLayout(self.file_box)
         self.file_box.setAcceptDrops(True)
         self.file_box.installEventFilter(self)
