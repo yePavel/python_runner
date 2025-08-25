@@ -5,7 +5,7 @@ import re
 from typing import List, Optional, Dict, Any
 
 from PySide6.QtCore import Qt, QSize, Slot, QEvent,QProcess
-from PySide6.QtGui import QIcon, QAction, QTextCursor
+from PySide6.QtGui import QIcon, QAction, QTextCursor,QTextCharFormat, QColor
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QFileDialog, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QListWidget, QListWidgetItem, QFormLayout, QLineEdit,
@@ -657,9 +657,7 @@ class MainWindow(QMainWindow):
         data = self.proc.readAllStandardOutput().data().decode(errors="replace")
         if not data:
             return
-        self.txt_log.moveCursor(QTextCursor.End)
-        self.txt_log.insertPlainText(data)
-        self.txt_log.moveCursor(QTextCursor.End)
+        self.append_log(data)
 
         # Detect "PROGRESS <0..100>"
         for line in data.splitlines():
@@ -721,9 +719,15 @@ class MainWindow(QMainWindow):
         self.list_scripts.setEnabled(True)
 
     def append_log(self, text: str):
-        self.txt_log.moveCursor(QTextCursor.End)
-        self.txt_log.insertPlainText(text)
-        self.txt_log.moveCursor(QTextCursor.End)
+        cursor = self.txt_log.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        for line in text.splitlines(True):
+            fmt = QTextCharFormat()
+            if re.search(r"(error|traceback)", line, re.IGNORECASE):
+                fmt.setForeground(QColor("red"))
+            cursor.insertText(line, fmt)
+        self.txt_log.setTextCursor(cursor)
+        self.txt_log.ensureCursorVisible()
 
     def set_status(self, text: str):
         self.lbl_status.setText(text)

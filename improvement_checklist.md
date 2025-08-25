@@ -4,7 +4,7 @@
 - [ ] Save the output of each run to a file for later review.
 
 ##  Recent Files/History
-- [ ] Show a list of recently run scripts and their arguments for quick access.
+- [x] Show a list of recently run scripts and their arguments for quick access.
 
 ##  Custom Script Arguments
 - [ ] Allow users to add custom arguments not in the schema.
@@ -18,10 +18,7 @@
 ##  Error Highlighting
 - [ ] Parse and highlight errors in the output for easier debugging.
 
-##  Integrated Help
-- [ ] Show script docstrings or usage info in the UI.
-
-## ✅ Drag & Drop
+##  Drag & Drop
 - [x] Allow users to drag files into the app to set file arguments.
 
 ##  Notifications
