@@ -16,7 +16,7 @@
 - [ ] Run multiple scripts at once and show their progress separately.
 
 ##  Error Highlighting
-- [ ] Parse and highlight errors in the output for easier debugging.
+- [x] Parse and highlight errors in the output for easier debugging.
 
 ##  Drag & Drop
 - [x] Allow users to drag files into the app to set file arguments.

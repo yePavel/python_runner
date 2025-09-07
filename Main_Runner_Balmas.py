@@ -38,9 +38,9 @@ SCRIPTS: List[Dict[str, Any]] = [
     #         {"key": "--user", "label": "User", "type": "text", "required": True, "placeholder": "e.g. Pavel"},
     #         {"key": "--a", "label": "first number", "type": "int", "required": True, "min": -1_000_000, "max": 1_000_000},
     #         {"key": "--b", "label": "second number", "type": "int", "required": True, "min": -1_000_000, "max": 1_000_000},
-    #         # {"key": "--threshold", "label": "Threshold", "type": "int", "required": False, "default": 50, "min": 0, "max": 100},
-    #         # {"key": "--mode", "label": "Mode", "type": "select", "required": True, "options": ["fast", "accurate"]},
-    #         # {"key": "--dry-run", "label": "Dry run", "type": "checkbox", "required": False, "default": False},
+    #         {"key": "--threshold", "label": "Threshold", "type": "int", "required": False, "default": 50, "min": 0, "max": 100},
+    #         {"key": "--mode", "label": "Mode", "type": "select", "required": True, "options": ["fast", "accurate"]},
+    #         {"key": "--dry-run", "label": "Dry run", "type": "checkbox", "required": False, "default": False},
     #     ],
     #     # how to pass the log file: "--log <path>" or positional
     #     "log_arg_style": "--log"
@@ -702,23 +702,74 @@ class MainWindow(QMainWindow):
             self.progress.setRange(0, 100)
         self.set_status("Error")
 
+    # def add_recent_run(self, script: Dict[str, Any], args: List[str]):
+    #     """Store and display the most recently executed script and its arguments."""
+    #     display = f"{script.get('name', '')} {' '.join(args[1:])}"
+    #     self.recent_runs = [r for r in self.recent_runs if r.get('display') != display]
+    #     self.recent_runs.insert(0, {'display': display, 'args': args[:]})
+    #     if len(self.recent_runs) > 10:
+    #         self.recent_runs.pop()
+    #     self.list_recent.clear()
+    #     for r in self.recent_runs:
+    #         self.list_recent.addItem(r['display'])
+
     def add_recent_run(self, script: Dict[str, Any], args: List[str]):
         """Store and display the most recently executed script and its arguments."""
+
+        # collect current values from form
+        params = {}
+        for b in self.form.bindings:
+            sch, w = b["schema"], b["widget"]
+            params[sch.get("key", "")] = self.form._value_of(w)
+
         display = f"{script.get('name', '')} {' '.join(args[1:])}"
+
         self.recent_runs = [r for r in self.recent_runs if r.get('display') != display]
-        self.recent_runs.insert(0, {'display': display, 'args': args[:]})
+        self.recent_runs.insert(0, {
+            'display': display,
+            'args': args[:],
+            'script': script,
+            'params': params
+        })
         if len(self.recent_runs) > 10:
             self.recent_runs.pop()
+
         self.list_recent.clear()
         for r in self.recent_runs:
             self.list_recent.addItem(r['display'])
 
     def on_recent_run(self, item):
-        """Double-click handler to rerun a previously executed script."""
+        """Double-click handler to re-populate form and optionally rerun."""
         row = self.list_recent.row(item)
         if 0 <= row < len(self.recent_runs):
-            args = self.recent_runs[row]['args']
-            self.start_process(args)
+            entry = self.recent_runs[row]
+
+            # set current script in UI
+            script = entry['script']
+            if script in SCRIPTS:
+                idx = SCRIPTS.index(script)
+                self.list_scripts.setCurrentRow(idx)
+
+            # rebuild form with schema
+            self.form.build(script.get("args_schema", []))
+
+            # restore saved parameter values
+            params = entry.get('params', {})
+            for b in self.form.bindings:
+                sch, w = b["schema"], b["widget"]
+                key = sch.get("key", "")
+                if key in params:
+                    self._set_widget_value(w, str(params[key]))
+
+            self.set_status(f"Loaded parameters!")
+            self.start_process(entry['args'])
+
+    # def on_recent_run(self, item):
+    #     """Double-click handler to rerun a previously executed script."""
+    #     row = self.list_recent.row(item)
+    #     if 0 <= row < len(self.recent_runs):
+    #         args = self.recent_runs[row]['args']
+    #         self.start_process(args)
 
     @Slot()
     def on_cancel(self):
