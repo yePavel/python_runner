@@ -3,6 +3,7 @@ import sys
 import os
 import re
 from typing import List, Optional, Dict, Any
+import json, subprocess
 
 from PySide6.QtCore import Qt, QSize, Slot, QEvent,QProcess
 from PySide6.QtGui import QIcon, QAction, QTextCursor,QTextCharFormat, QColor
@@ -107,6 +108,74 @@ SCRIPTS: List[Dict[str, Any]] = [
 
 ]
 
+# ---------- LLM CHAT ----------
+class LLMToolRouter:
+    """
+    Minimal 'tool router' that asks a local LLM (via Ollama) to choose a tool
+    and produce argument values in JSON. We only send tool schemas; the app
+    injects the main --log/positional automatically.
+    """
+    def __init__(self, model: str = "llama3", timeout_sec: int = 60):
+        self.model = model
+        self.timeout_sec = timeout_sec
+
+    def think_and_route(self, user_text: str, scripts: List[Dict[str, Any]]) -> Dict[str, Any]:
+        tools = []
+        OLLAMA_PATH = r"C:\Users\PAVELYE\AppData\Local\Programs\Ollama\ollama.exe"
+
+        for s in scripts:
+            tools.append({
+                "name": s["name"],
+                "description": s.get("clue", s.get("description", "")),
+                "log_arg_style": s.get("log_arg_style", "--log"),
+                "args_schema": [
+                    {"key": a.get("key", ""), "type": a.get("type", "text"), "required": a.get("required", False)}
+                    for a in s.get("args_schema", [])
+                ],
+            })
+
+        system = (
+            "You are a helpful assistant that can both chat naturally and suggest a tool call.\n"
+            "You have the following TOOLS available, each with a name, description and args_schema.\n"
+            "When appropriate, explain what you will do, then include a JSON block like this:\n"
+            "{ \"tool\": \"ToolName\", \"args\": {\"--flag\": \"value\"} }\n"
+            "Only use keys from the tool's args_schema. For checkboxes use true/false.\n"
+            "If no tool fits, just chat normally.\n"
+        )
+
+
+        prompt = (
+            f"{system}\nTOOLS=\n{json.dumps(tools, ensure_ascii=False)}\n\n"
+            f"USER=\n{user_text}\n\nJSON="
+        )
+
+        try:
+            res = subprocess.run(
+                [OLLAMA_PATH, "run", self.model],
+                input=prompt.encode("utf-8"),
+                capture_output=True,
+                timeout=self.timeout_sec,
+            )
+        except FileNotFoundError:
+            # Ollama missing
+            return {"tool": "none", "args": {}, "thought": "Ollama not found. Install it and run `ollama pull llama3`."}
+        except subprocess.TimeoutExpired:
+            return {"tool": "none", "args": {}, "thought": "Model timed out."}
+
+        text = (res.stdout or b"").decode("utf-8", errors="replace").strip()
+        return self._extract_json(text)
+
+    def _extract_json(self, text: str) -> Dict[str, Any]:
+        import re, json as _json
+        m = re.search(r"\{.*\}", text, re.S)
+        if not m:
+            return {"tool": "none", "args": {}, "thought": "", "raw": text}
+        try:
+            obj = _json.loads(m.group(0))
+            return {**obj, "raw": text}
+        except Exception as e:
+            return {"tool": "none", "args": {}, "thought": f"JSON parse error: {e}", "raw": text}
+
 # ---------- Dynamic form ----------
 
 class DynamicForm(QWidget):
@@ -115,8 +184,7 @@ class DynamicForm(QWidget):
         super().__init__(parent)
         self.form = QFormLayout(self)
         self.form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        self.bindings: List[Dict[str, Any]] = []  # each: {"schema":..., "widget":...}
-            
+        self.bindings: List[Dict[str, Any]] = []  # each: {"schema":..., "widget":...}       
 
     def clear(self):
         while self.form.rowCount():
@@ -436,8 +504,40 @@ class MainWindow(QMainWindow):
         if SCRIPTS:
             self.list_scripts.setCurrentRow(0)
 
-        self.apply_theme()
+        # ---- LLM Chat panel ----
+        
+        chat_box = QGroupBox("LLM Chat (Tools)")
+        chat_layout = QVBoxLayout(chat_box)
+        self.chat_history = QTextEdit()
+        self.chat_history.setReadOnly(True)
+        self.chat_history.setPlaceholderText("Assistant output appears here...")
+        self.chat_input = QLineEdit()
+        self.chat_input.setPlaceholderText("e.g. cut the log by ids 123,456 and save to out.log")
+        row_chat_btns = QHBoxLayout()
+        self.btn_chat_send = QPushButton("Send")
+        self.btn_chat_run = QPushButton("Run Suggestion")
+        self.btn_chat_run.setEnabled(False)
+        row_chat_btns.addWidget(self.btn_chat_send)
+        row_chat_btns.addWidget(self.btn_chat_run)
 
+        chat_layout.addWidget(self.chat_history)
+        chat_layout.addWidget(self.chat_input)
+        chat_layout.addLayout(row_chat_btns)
+
+        # here we add to root_layout as a third column
+        root_layout.addWidget(chat_box, 1)
+
+        # router state
+        self.router = LLMToolRouter(model="llama3")
+        self._last_tool_call = None
+
+        # wire signals
+        self.btn_chat_send.clicked.connect(self.on_chat_send)
+        self.btn_chat_run.clicked.connect(self.on_chat_run_suggestion)
+        self.chat_input.returnPressed.connect(self.on_chat_send)
+
+        self.apply_theme()
+    
     def apply_theme(self):
         if self.theme_is_dark:
             self.setStyleSheet("""
@@ -578,9 +678,108 @@ class MainWindow(QMainWindow):
                 }
             """)
         msg.exec()
-            
-    # ---------- UI actions ----------
+    
+    def build_args_for_script(self, script: Dict[str, Any], tool_args: Dict[str, Any]) -> List[str]:
+        """
+        Build argv like on_run_clicked, but args come from the LLM (tool_args).
+        We respect log_arg_style and append --mode gui.
+        """
+        if not self.log_file_path:
+            raise RuntimeError("Please choose a Main Path (file/folder) first.")
 
+        args = [PYTHON, script["path"]]
+
+        style = script.get("log_arg_style", "--log")
+        if style == "positional":
+            args.append(self.log_file_path)
+        else:
+            args.extend([style, self.log_file_path])
+
+        # push args in schema order for stability
+        for sch in script.get("args_schema", []):
+            key = sch.get("key", "")
+            if not key:
+                continue
+            typ = sch.get("type", "text")
+            if typ == "checkbox":
+                val = tool_args.get(key, False)
+                if isinstance(val, str):
+                    val = val.strip().lower() in ("1", "true", "yes", "on")
+                if val:
+                    args.append(key)
+            else:
+                if key in tool_args and tool_args[key] != "":
+                    args.extend([key, str(tool_args[key])])
+
+        args.extend(["--mode", "gui"])
+        return args
+  
+    # ---------- UI actions ----------
+    # @@@@@@@ ---- LLM CHAT UI ------ @@@@@@@
+    @Slot()
+    @Slot()
+    def on_chat_send(self):
+        text = self.chat_input.text().strip()
+        if not text:
+            return
+
+        self.chat_history.append(f"<b>You:</b> {text}")
+        self.chat_input.clear()
+
+        result = self.router.think_and_route(text, SCRIPTS)
+
+        # always show the raw LLM reply
+        raw_reply = result.get("raw", "")
+        if raw_reply:
+            self.chat_history.append(f"<b>Assistant:</b> {raw_reply}")
+
+        tool_name = str(result.get("tool", "none"))
+        args_obj = result.get("args", {}) or {}
+
+        if tool_name.lower() == "none":
+            self.btn_chat_run.setEnabled(False)
+            self._last_tool_call = None
+            return
+
+        # find script
+        script = next((s for s in SCRIPTS if s["name"].lower() == tool_name.lower()), None)
+        if not script:
+            self.chat_history.append(f"<b>Note:</b> Assistant suggested '{tool_name}' but it's not in your tools.")
+            self.btn_chat_run.setEnabled(False)
+            self._last_tool_call = None
+            return
+
+        try:
+            preview_args = self.build_args_for_script(script, args_obj)
+        except Exception as e:
+            self.chat_history.append(f"<b>Note:</b> {e}")
+            self.btn_chat_run.setEnabled(False)
+            self._last_tool_call = None
+            return
+
+        # remember tool call
+        self._last_tool_call = {"script": script, "argv": preview_args, "args": args_obj}
+        self.chat_history.append(
+            f"<b>Suggestion:</b> Run <code>{' '.join(preview_args)}</code>"
+        )
+        self.btn_chat_run.setEnabled(True)
+
+
+    @Slot()
+    def on_chat_run_suggestion(self):
+        if not self._last_tool_call:
+            return
+        argv = self._last_tool_call["argv"]
+        script = self._last_tool_call["script"]
+
+        # record to recent + run
+        self.add_recent_run(script, argv)
+        self.start_process(argv)
+
+        # UX: disable until next suggestion
+        self.btn_chat_run.setEnabled(False)
+    # @@@@@@@ ---- LLM CHAT UI END ------ @@@@@@@
+    
     @Slot()
     def on_log_mode_changed(self,text:str):
         self.log_is_dir = (text.lower() == "folder")
@@ -702,17 +901,6 @@ class MainWindow(QMainWindow):
             self.progress.setRange(0, 100)
         self.set_status("Error")
 
-    # def add_recent_run(self, script: Dict[str, Any], args: List[str]):
-    #     """Store and display the most recently executed script and its arguments."""
-    #     display = f"{script.get('name', '')} {' '.join(args[1:])}"
-    #     self.recent_runs = [r for r in self.recent_runs if r.get('display') != display]
-    #     self.recent_runs.insert(0, {'display': display, 'args': args[:]})
-    #     if len(self.recent_runs) > 10:
-    #         self.recent_runs.pop()
-    #     self.list_recent.clear()
-    #     for r in self.recent_runs:
-    #         self.list_recent.addItem(r['display'])
-
     def add_recent_run(self, script: Dict[str, Any], args: List[str]):
         """Store and display the most recently executed script and its arguments."""
 
@@ -763,13 +951,6 @@ class MainWindow(QMainWindow):
 
             self.set_status(f"Loaded parameters!")
             self.start_process(entry['args'])
-
-    # def on_recent_run(self, item):
-    #     """Double-click handler to rerun a previously executed script."""
-    #     row = self.list_recent.row(item)
-    #     if 0 <= row < len(self.recent_runs):
-    #         args = self.recent_runs[row]['args']
-    #         self.start_process(args)
 
     @Slot()
     def on_cancel(self):
