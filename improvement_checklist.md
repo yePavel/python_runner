@@ -22,7 +22,7 @@
 - [x] Allow users to drag files into the app to set file arguments.
 
 ##  Notifications
-- [ ] Show a popup or system notification when a script finishes.
+- [x] Show a popup or system notification when a script finishes.
 
 ##  Command Preview
 - [ ] Display the full command line before running for review/copy.
