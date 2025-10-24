@@ -4,13 +4,13 @@ import os
 import re
 from typing import List, Optional, Dict, Any
 
-from PySide6.QtCore import Qt, QSize, Slot, QEvent,QProcess
+from PySide6.QtCore import Qt, QSize, Slot, QEvent,QProcess, QSettings
 from PySide6.QtGui import QIcon, QAction, QTextCursor,QTextCharFormat, QColor
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QFileDialog, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QListWidget, QListWidgetItem, QFormLayout, QLineEdit,
     QSpinBox, QDoubleSpinBox, QComboBox, QCheckBox, QTextEdit, QGroupBox,
-    QProgressBar, QMessageBox, QToolBar, QToolTip
+    QProgressBar, QMessageBox, QToolBar, QToolTip, QSystemTrayIcon, QMenu
 )
 
 PYTHON = sys.executable  # use same interpreter
@@ -101,6 +101,16 @@ SCRIPTS: List[Dict[str, Any]] = [
         {"key": "--delay", "label": "Delay (sec)", "type": "float", "required": False, "default": 0.25, "min": 0.0, "max": 5.0, "step": 0.05},
         {"key": "--stderr", "label": "Emit stderr", "type": "checkbox", "required": False, "default": True},
         {"key": "--fail", "label": "Emit traceback", "type": "checkbox", "required": False, "default": False}
+    ],
+    "log_arg_style": "--log"
+},
+    {
+    "name": "Notification Tester",
+    "path": "test_notifications.py",
+    "clue": "Test the notification system with different scenarios (success, failure, error).",
+    "args_schema": [
+        {"key": "--scenario", "label": "Scenario", "type": "select", "required": False, "default": "success", "options": ["success", "failure", "error"]},
+        {"key": "--steps", "label": "Steps", "type": "int", "required": False, "default": 5, "min": 1, "max": 20}
     ],
     "log_arg_style": "--log"
 }
@@ -293,6 +303,28 @@ class MainWindow(QMainWindow):
         self.resize(980, 640)
         self.setWindowIcon(QIcon())
         
+        # Settings for persistent preferences
+        self.settings = QSettings("MainRunner", "ScriptRunner")
+        
+        # Notification settings
+        self.notifications_enabled = self.settings.value("notifications_enabled", True, type=bool)
+        
+        # System tray icon for notifications
+        self.tray_icon = None
+        if QSystemTrayIcon.isSystemTrayAvailable():
+            self.tray_icon = QSystemTrayIcon(self)
+            self.tray_icon.setIcon(self.style().standardIcon(self.style().SP_ComputerIcon))
+            self.tray_icon.setToolTip("Main Runner")
+            
+            tray_menu = QMenu()
+            show_action = tray_menu.addAction("Show Window")
+            show_action.triggered.connect(self.show)
+            quit_action = tray_menu.addAction("Quit")
+            quit_action.triggered.connect(QApplication.quit)
+            
+            self.tray_icon.setContextMenu(tray_menu)
+            self.tray_icon.show()
+        
         # define adding Theme button (sun/moon)
         self.theme_is_dark = False
         self.btn_theme = QPushButton()
@@ -315,6 +347,13 @@ class MainWindow(QMainWindow):
         self.btn_paste_raw.setFixedSize(45, 45)
         self.btn_paste_raw.clicked.connect(self.paste_from_log_selection)
         
+        # define adding Notifications Toggle Button to toolbar
+        self.btn_notifications = QPushButton()
+        self.btn_notifications.setText("🔔" if self.notifications_enabled else "🔕")
+        self.btn_notifications.setToolTip("Toggle notifications")
+        self.btn_notifications.setFixedSize(45, 45)
+        self.btn_notifications.clicked.connect(self.toggle_notifications)
+        
         # Actual addWidget theme to toolbar
         tb = QToolBar("Main")
         tb.setIconSize(QSize(18, 18))
@@ -322,6 +361,7 @@ class MainWindow(QMainWindow):
         tb.addWidget(self.btn_theme)
         tb.addWidget(self.act_clear)
         tb.addWidget(self.btn_paste_raw)
+        tb.addWidget(self.btn_notifications)
 
 
         # Central layout
@@ -515,6 +555,34 @@ class MainWindow(QMainWindow):
     def toggle_theme(self):
         self.theme_is_dark = not self.theme_is_dark
         self.apply_theme()
+    
+    def toggle_notifications(self):
+        self.notifications_enabled = not self.notifications_enabled
+        self.settings.setValue("notifications_enabled", self.notifications_enabled)
+        self.btn_notifications.setText("🔔" if self.notifications_enabled else "🔕")
+        status = "enabled" if self.notifications_enabled else "disabled"
+        self.set_status(f"Notifications {status}")
+        if self.notifications_enabled:
+            self.show_notification("Notifications Enabled", "You will receive notifications when scripts finish running", QSystemTrayIcon.Information)
+    
+    def show_notification(self, title: str, message: str, icon=QSystemTrayIcon.Information):
+        if not self.notifications_enabled:
+            return
+        
+        if self.tray_icon and self.tray_icon.isVisible():
+            self.tray_icon.showMessage(title, message, icon, 5000)
+        else:
+            msg = QMessageBox()
+            msg.setWindowTitle(title)
+            msg.setText(message)
+            if icon == QSystemTrayIcon.Critical:
+                msg.setIcon(QMessageBox.Critical)
+            elif icon == QSystemTrayIcon.Warning:
+                msg.setIcon(QMessageBox.Warning)
+            else:
+                msg.setIcon(QMessageBox.Information)
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
 
     def eventFilter(self, obj, event):
         targets = (self.file_box, self.lbl_log, self.log_mode, getattr(self, "btn_browse", None))
@@ -691,6 +759,21 @@ class MainWindow(QMainWindow):
         self.btn_run.setEnabled(True)
         self.btn_cancel.setEnabled(False)
         self.list_scripts.setEnabled(True)
+        
+        script_name = self.current_script.get("name", "Script") if self.current_script else "Script"
+        
+        if exitCode == 0:
+            self.show_notification(
+                "Script Completed Successfully",
+                f"{script_name} finished successfully!",
+                QSystemTrayIcon.Information
+            )
+        else:
+            self.show_notification(
+                "Script Failed",
+                f"{script_name} failed with exit code {exitCode}",
+                QSystemTrayIcon.Critical
+            )
 
     @Slot()
     def on_proc_error(self, err):
@@ -701,6 +784,13 @@ class MainWindow(QMainWindow):
         if self.progress.maximum() == 0:
             self.progress.setRange(0, 100)
         self.set_status("Error")
+        
+        script_name = self.current_script.get("name", "Script") if self.current_script else "Script"
+        self.show_notification(
+            "Script Error",
+            f"{script_name} encountered an error: {err}",
+            QSystemTrayIcon.Critical
+        )
 
     # def add_recent_run(self, script: Dict[str, Any], args: List[str]):
     #     """Store and display the most recently executed script and its arguments."""
