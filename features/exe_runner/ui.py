@@ -16,6 +16,10 @@ from .controller import ExeRunnerController
 from .process_runner import ExeProcessRunner
 
 
+# Default path for exe versions (hardcoded but can be changed)
+DEFAULT_ROOT_PATH = r"C:\Users\pavelye\Desktop\New folder\python_runner\test_executables"
+
+
 class ExeRunnerTab(QWidget):
     """Main UI for the EXE Runner feature."""
     
@@ -152,7 +156,11 @@ class ExeRunnerTab(QWidget):
     # ===== Slot: Root folder browse =====
     @Slot()
     def _on_root_browse(self):
-        path = QFileDialog.getExistingDirectory(self, "Select Root Versions Folder")
+        path = QFileDialog.getExistingDirectory(
+            self, 
+            "Select Root Versions Folder",
+            DEFAULT_ROOT_PATH
+        )
         if path:
             self.root_path = path
             self.lbl_root.setText(os.path.basename(path))
@@ -177,7 +185,11 @@ class ExeRunnerTab(QWidget):
         self.combo_version.addItems(filtered)
         self.combo_version.blockSignals(False)
         
-        self._on_version_changed("")
+        # Trigger exe loading for the first filtered result (if any)
+        if filtered:
+            self._on_version_changed(filtered[0])
+        else:
+            self._on_version_changed("")
     
     def _refresh_versions(self):
         """Refresh version list from root path."""

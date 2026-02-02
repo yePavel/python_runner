@@ -48,12 +48,12 @@ class ExeRunnerController:
     @staticmethod
     def get_exe_files(version_path: str) -> List[str]:
         """
-        Discover all .exe files in <version>\\bit\\ folder.
+        Discover all .exe files in <version>\\64x\\ folder.
         
         Returns:
             List of exe file names (basenames), sorted alphabetically
         """
-        bit_path = os.path.join(version_path, "bit")
+        bit_path = os.path.join(version_path, "64x")
         
         if not os.path.isdir(bit_path):
             return []
@@ -94,9 +94,9 @@ class ExeRunnerController:
     @staticmethod
     def build_exe_full_path(root_path: str, version_name: str, exe_name: str) -> str:
         """Build full path to exe."""
-        return os.path.join(root_path, version_name, "bit", exe_name)
+        return os.path.join(root_path, version_name, "64x", exe_name)
     
     @staticmethod
     def get_working_directory(root_path: str, version_name: str) -> str:
-        """Get the working directory for exe (the bit folder)."""
-        return os.path.join(root_path, version_name, "bit")
+        """Get the working directory for exe (the 64x folder)."""
+        return os.path.join(root_path, version_name, "64x")
