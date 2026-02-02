@@ -20,15 +20,15 @@ from .process_runner import ExeProcessRunner
 DEFAULT_ROOT_PATH = r"C:\Users\pavelye\Desktop\New folder\python_runner\test_executables"
 
 
-class ExeRunnerTab(QWidget):
-    """Main UI for the EXE Runner feature."""
+class ExeRunnerPanel(QWidget):
+    """Single EXE Runner panel (left or right side)."""
     
-    def __init__(self, parent=None):
+    def __init__(self, panel_name: str = "Runner", parent=None):
         super().__init__(parent)
+        self.panel_name = panel_name
         self.root_path: Optional[str] = None
         self.selected_version: Optional[str] = None
         self.selected_exe: Optional[str] = None
-        self.theme_is_dark = False
         
         self.runner = ExeProcessRunner(self)
         self.runner.started.connect(self._on_process_started)
@@ -38,18 +38,27 @@ class ExeRunnerTab(QWidget):
         
         self._init_ui()
     
+    def set_root_path(self, path: str):
+        """Set root path from parent (shared between both panels)."""
+        self.root_path = path
+        self.lbl_root.setText(os.path.basename(path) if path else "No folder selected")
+        self.txt_version_search.clear()
+        self._refresh_versions()
+    
     def _init_ui(self):
-        """Build the UI layout."""
+        """Build the UI layout for this panel."""
         main_layout = QVBoxLayout(self)
         
-        # ===== Root Path Section =====
+        # ===== Title =====
+        title = QLabel(f"<b>{self.panel_name}</b>")
+        main_layout.addWidget(title)
+        
+        # ===== Root Path Display =====
         root_box = QGroupBox("Root Versions Folder")
         root_layout = QHBoxLayout(root_box)
         self.lbl_root = QLabel("No folder selected")
-        self.btn_root_browse = QPushButton("Browse…")
-        self.btn_root_browse.clicked.connect(self._on_root_browse)
+        self.lbl_root.setEnabled(False)  # Read-only display
         root_layout.addWidget(self.lbl_root, 1)
-        root_layout.addWidget(self.btn_root_browse)
         main_layout.addWidget(root_box)
         
         # ===== Version Selection Section =====
@@ -96,13 +105,13 @@ class ExeRunnerTab(QWidget):
         control_layout = QHBoxLayout()
         self.btn_run = QPushButton("Run")
         self.btn_run.setObjectName("RunButton")
-        self.btn_run.setMinimumSize(100, 40)
+        self.btn_run.setMinimumSize(80, 35)
         self.btn_run.clicked.connect(self._on_run)
         self.btn_run.setEnabled(False)
         
         self.btn_stop = QPushButton("Stop")
         self.btn_stop.setObjectName("CancelButton")
-        self.btn_stop.setMinimumSize(100, 40)
+        self.btn_stop.setMinimumSize(80, 35)
         self.btn_stop.clicked.connect(self._on_stop)
         self.btn_stop.setEnabled(False)
         
@@ -117,7 +126,7 @@ class ExeRunnerTab(QWidget):
         
         # Options row
         options_layout = QHBoxLayout()
-        self.chk_timestamps = QCheckBox("Show timestamps")
+        self.chk_timestamps = QCheckBox("Timestamps")
         self.chk_timestamps.setChecked(False)
         options_layout.addWidget(self.chk_timestamps)
         self.chk_autoscroll = QCheckBox("Auto-scroll")
@@ -139,34 +148,19 @@ class ExeRunnerTab(QWidget):
         main_layout.addWidget(output_box, 1)
         
         # ===== Status Line =====
-        status_layout = QHBoxLayout()
         self.lbl_status = QLabel("Idle")
-        status_layout.addWidget(self.lbl_status, 1)
         self.lbl_exit_code = QLabel("")
+        status_layout = QHBoxLayout()
+        status_layout.addWidget(self.lbl_status, 1)
         status_layout.addWidget(self.lbl_exit_code)
         main_layout.addLayout(status_layout)
         
         self.setLayout(main_layout)
         self._update_run_button_state()
     
-    def set_theme_dark(self, is_dark: bool):
-        """Update theme styling."""
-        self.theme_is_dark = is_dark
+
     
-    # ===== Slot: Root folder browse =====
-    @Slot()
-    def _on_root_browse(self):
-        path = QFileDialog.getExistingDirectory(
-            self, 
-            "Select Root Versions Folder",
-            DEFAULT_ROOT_PATH
-        )
-        if path:
-            self.root_path = path
-            self.lbl_root.setText(os.path.basename(path))
-            self.txt_version_search.clear()
-            self._refresh_versions()
-            self._set_status("Root path selected")
+
     
     # ===== Slot: Version search/filter =====
     @Slot(str)
@@ -227,7 +221,7 @@ class ExeRunnerTab(QWidget):
         if not exes:
             self.combo_exe.addItem("(no .exe files found)")
             self.combo_exe.setEnabled(False)
-            self._set_status(f"Error: No .exe files in {text}\\bit\\")
+            self._set_status(f"Error: No .exe files in {text}\\64x\\")
         else:
             self.combo_exe.addItems(exes)
             self.combo_exe.setEnabled(True)
@@ -317,7 +311,6 @@ class ExeRunnerTab(QWidget):
         self.btn_stop.setEnabled(True)
         self.combo_version.setEnabled(False)
         self.combo_exe.setEnabled(False)
-        self.btn_root_browse.setEnabled(False)
         self.btn_log_browse.setEnabled(False)
         self.txt_log_file.setEnabled(False)
         self._set_status("Running...")
@@ -354,7 +347,6 @@ class ExeRunnerTab(QWidget):
         self.btn_stop.setEnabled(False)
         self.combo_version.setEnabled(True)
         self.combo_exe.setEnabled(True if self.selected_exe != "(no .exe files found)" else False)
-        self.btn_root_browse.setEnabled(True)
         self.btn_log_browse.setEnabled(True)
         self.txt_log_file.setEnabled(True)
         
@@ -381,7 +373,6 @@ class ExeRunnerTab(QWidget):
         self.btn_stop.setEnabled(False)
         self.combo_version.setEnabled(True)
         self.combo_exe.setEnabled(True if self.selected_exe != "(no .exe files found)" else False)
-        self.btn_root_browse.setEnabled(True)
         self.btn_log_browse.setEnabled(True)
         self.txt_log_file.setEnabled(True)
     
@@ -396,3 +387,66 @@ class ExeRunnerTab(QWidget):
     def _set_status(self, text: str):
         """Update status label."""
         self.lbl_status.setText(text)
+
+class ExeRunnerTab(QWidget):
+    """Main EXE Runner tab with dual side-by-side panels."""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.root_path: Optional[str] = None
+        self.theme_is_dark = False
+        self._init_ui()
+    
+    def _init_ui(self):
+        """Build the main layout with 2 side-by-side panels."""
+        main_layout = QHBoxLayout(self)
+        
+        # ===== Root Path Section (shared) =====
+        root_section = QVBoxLayout()
+        root_box = QGroupBox("Root Versions Folder")
+        root_layout = QHBoxLayout(root_box)
+        self.lbl_root = QLabel("No folder selected")
+        self.btn_root_browse = QPushButton("Browse…")
+        self.btn_root_browse.clicked.connect(self._on_root_browse)
+        root_layout.addWidget(self.lbl_root, 1)
+        root_layout.addWidget(self.btn_root_browse)
+        root_section.addWidget(root_box)
+        
+        # ===== Left Panel =====
+        left_panel = ExeRunnerPanel("Left Runner")
+        self.left_runner = left_panel
+        
+        # ===== Right Panel =====
+        right_panel = ExeRunnerPanel("Right Runner")
+        self.right_runner = right_panel
+        
+        # ===== Combine layout =====
+        panels_layout = QHBoxLayout()
+        panels_layout.addWidget(left_panel, 1)
+        panels_layout.addWidget(right_panel, 1)
+        
+        main_layout.addLayout(root_section, 0)
+        main_layout.addLayout(panels_layout, 1)
+        
+        self.setLayout(main_layout)
+    
+    def set_theme_dark(self, is_dark: bool):
+        """Update theme styling for both panels."""
+        self.theme_is_dark = is_dark
+        # Theme updates would go here if needed
+    
+    @Slot()
+    def _on_root_browse(self):
+        """Browse and select root path, apply to both panels."""
+        path = QFileDialog.getExistingDirectory(
+            self,
+            "Select Root Versions Folder",
+            DEFAULT_ROOT_PATH
+        )
+        if path:
+            self.root_path = path
+            self.lbl_root.setText(os.path.basename(path))
+            
+            # Update both panels with the same root path
+            self.left_runner.set_root_path(path)
+            self.right_runner.set_root_path(path)
