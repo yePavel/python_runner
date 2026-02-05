@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 from typing import Optional
 
-from PySide6.QtCore import Qt, Slot, QSize
+from PySide6.QtCore import Qt, Slot, QSize, QTimer
 from PySide6.QtGui import QIcon, QTextCursor, QTextCharFormat, QColor
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
@@ -29,6 +29,12 @@ class ExeRunnerPanel(QWidget):
         self.root_path: Optional[str] = None
         self.selected_version: Optional[str] = None
         self.selected_exe: Optional[str] = None
+        self._all_versions = []
+        self._pending_search_text = ""
+        self._version_search_timer = QTimer(self)
+        self._version_search_timer.setSingleShot(True)
+        self._version_search_timer.setInterval(200)
+        self._version_search_timer.timeout.connect(self._apply_version_filter)
         
         self.runner = ExeProcessRunner(self)
         self.runner.started.connect(self._on_process_started)
@@ -169,20 +175,38 @@ class ExeRunnerPanel(QWidget):
         if not self.root_path:
             return
         
-        all_versions = ExeRunnerController.get_version_folders(self.root_path)
-        search_text = text.strip().lower()
-        
+        self._pending_search_text = text
+        self._version_search_timer.start()
+
+    def _apply_version_filter(self):
+        """Apply search filter to cached version list."""
+        if not self.root_path:
+            return
+
+        search_text = self._pending_search_text.strip().lower()
+        all_versions = self._all_versions
         filtered = [v for v in all_versions if search_text in v.lower()] if search_text else all_versions
-        
+
+        previous_selection = self.combo_version.currentText()
+
         self.combo_version.blockSignals(True)
         self.combo_version.clear()
         self.combo_version.addItems(filtered)
-        self.combo_version.blockSignals(False)
-        
-        # Trigger exe loading for the first filtered result (if any)
+
+        new_selection = ""
         if filtered:
-            self._on_version_changed(filtered[0])
-        else:
+            if previous_selection in filtered:
+                self.combo_version.setCurrentText(previous_selection)
+                new_selection = previous_selection
+            else:
+                self.combo_version.setCurrentIndex(0)
+                new_selection = self.combo_version.currentText()
+
+        self.combo_version.blockSignals(False)
+
+        if new_selection != previous_selection:
+            self._on_version_changed(new_selection)
+        elif not new_selection:
             self._on_version_changed("")
     
     def _refresh_versions(self):
@@ -190,15 +214,9 @@ class ExeRunnerPanel(QWidget):
         if not self.root_path:
             self.combo_version.clear()
             return
-        
-        versions = ExeRunnerController.get_version_folders(self.root_path)
-        self.combo_version.blockSignals(True)
-        self.combo_version.clear()
-        self.combo_version.addItems(versions)
-        self.combo_version.blockSignals(False)
-        
-        if versions:
-            self._on_version_changed(versions[0])
+
+        self._all_versions = ExeRunnerController.get_version_folders(self.root_path)
+        self._apply_version_filter()
     
     # ===== Slot: Version changed =====
     @Slot(str)
@@ -396,13 +414,13 @@ class ExeRunnerTab(QWidget):
         self.root_path: Optional[str] = None
         self.theme_is_dark = False
         self._init_ui()
+        self._apply_root_path(DEFAULT_ROOT_PATH)
     
     def _init_ui(self):
         """Build the main layout with 2 side-by-side panels."""
-        main_layout = QHBoxLayout(self)
+        main_layout = QVBoxLayout(self)  # Changed from QHBoxLayout to vertical
         
         # ===== Root Path Section (shared) =====
-        root_section = QVBoxLayout()
         root_box = QGroupBox("Root Versions Folder")
         root_layout = QHBoxLayout(root_box)
         self.lbl_root = QLabel("No folder selected")
@@ -410,7 +428,6 @@ class ExeRunnerTab(QWidget):
         self.btn_root_browse.clicked.connect(self._on_root_browse)
         root_layout.addWidget(self.lbl_root, 1)
         root_layout.addWidget(self.btn_root_browse)
-        root_section.addWidget(root_box)
         
         # ===== Left Panel =====
         left_panel = ExeRunnerPanel("Left Runner")
@@ -420,13 +437,14 @@ class ExeRunnerTab(QWidget):
         right_panel = ExeRunnerPanel("Right Runner")
         self.right_runner = right_panel
         
-        # ===== Combine layout =====
+        # ===== Panels Layout (horizontal) =====
         panels_layout = QHBoxLayout()
         panels_layout.addWidget(left_panel, 1)
         panels_layout.addWidget(right_panel, 1)
         
-        main_layout.addLayout(root_section, 0)
-        main_layout.addLayout(panels_layout, 1)
+        # ===== Add to Main Layout =====
+        main_layout.addWidget(root_box, 0)      # Root at TOP (no stretch)
+        main_layout.addLayout(panels_layout, 1) # Panels BELOW (grow to fill)
         
         self.setLayout(main_layout)
     
@@ -434,6 +452,19 @@ class ExeRunnerTab(QWidget):
         """Update theme styling for both panels."""
         self.theme_is_dark = is_dark
         # Theme updates would go here if needed
+
+    def _apply_root_path(self, path: str):
+        """Apply root path to UI and both panels if valid."""
+        is_valid, _ = ExeRunnerController.validate_root_path(path)
+        if not is_valid:
+            return
+
+        self.root_path = path
+        self.lbl_root.setText(os.path.basename(path))
+
+        # Update both panels with the same root path
+        self.left_runner.set_root_path(path)
+        self.right_runner.set_root_path(path)
     
     @Slot()
     def _on_root_browse(self):
@@ -444,9 +475,4 @@ class ExeRunnerTab(QWidget):
             DEFAULT_ROOT_PATH
         )
         if path:
-            self.root_path = path
-            self.lbl_root.setText(os.path.basename(path))
-            
-            # Update both panels with the same root path
-            self.left_runner.set_root_path(path)
-            self.right_runner.set_root_path(path)
+            self._apply_root_path(path)

@@ -39,7 +39,7 @@ class ExeRunnerController:
             items = os.listdir(root_path)
             folders = [
                 item for item in items
-                if os.path.isdir(os.path.join(root_path, item))
+                if os.path.isdir(os.path.join(root_path, item)) and item[:1].isdigit()
             ]
             return sorted(folders)
         except Exception:
