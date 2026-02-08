@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 from typing import Optional
 
-from PySide6.QtCore import Qt, Slot, QSize, QTimer
+from PySide6.QtCore import Qt, Slot, QSize, QTimer, QEvent
 from PySide6.QtGui import QIcon, QTextCursor, QTextCharFormat, QColor
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
@@ -98,9 +98,14 @@ class ExeRunnerPanel(QWidget):
         
         # ===== Log File Section =====
         log_box = QGroupBox("Log File")
+        self.log_box = log_box
         log_layout = QHBoxLayout(log_box)
         self.txt_log_file = QLineEdit()
         self.txt_log_file.setPlaceholderText("e.g., test.log or full path")
+        self.txt_log_file.setAcceptDrops(True)
+        self.txt_log_file.installEventFilter(self)
+        self.log_box.setAcceptDrops(True)
+        self.log_box.installEventFilter(self)
         self.btn_log_browse = QPushButton("Browse…")
         self.btn_log_browse.clicked.connect(self._on_log_browse)
         log_layout.addWidget(self.txt_log_file, 1)
@@ -217,6 +222,44 @@ class ExeRunnerPanel(QWidget):
 
         self._all_versions = ExeRunnerController.get_version_folders(self.root_path)
         self._apply_version_filter()
+
+    def eventFilter(self, obj, event):
+        targets = (getattr(self, "log_box", None), getattr(self, "txt_log_file", None))
+        if obj in targets:
+            et = event.type()
+
+            if et == QEvent.DragEnter:
+                if event.mimeData().hasUrls():
+                    event.acceptProposedAction()
+                    self.log_box.setStyleSheet(
+                        "QGroupBox { border: 2px dashed #4c8bf5; border-radius: 6px; }"
+                    )
+                    return True
+                return False
+
+            if et == QEvent.DragMove:
+                if event.mimeData().hasUrls():
+                    event.acceptProposedAction()
+                    return True
+                return False
+
+            if et == QEvent.DragLeave:
+                self.log_box.setStyleSheet("")
+                return True
+
+            if et == QEvent.Drop:
+                urls = event.mimeData().urls()
+                self.log_box.setStyleSheet("")
+                if not urls:
+                    return False
+                path = urls[0].toLocalFile()
+                if not path or os.path.isdir(path):
+                    return False
+                self.txt_log_file.setText(path)
+                event.acceptProposedAction()
+                return True
+
+        return super().eventFilter(obj, event)
     
     # ===== Slot: Version changed =====
     @Slot(str)
