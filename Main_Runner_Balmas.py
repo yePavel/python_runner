@@ -4,7 +4,7 @@ import os
 import re
 from typing import List, Optional, Dict, Any
 
-from PySide6.QtCore import Qt, QSize, Slot, QEvent,QProcess
+from PySide6.QtCore import Qt, QSize, Slot, QEvent, QProcess, QTimer
 from PySide6.QtGui import QIcon, QAction, QTextCursor,QTextCharFormat, QColor
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QFileDialog, QHBoxLayout, QVBoxLayout,
@@ -451,75 +451,93 @@ class MainWindow(QMainWindow):
     def apply_theme(self):
         if self.theme_is_dark:
             self.setStyleSheet("""
-                QMainWindow { background: #1e1f24; color: #f0f0f0; }
-                QLabel, QGroupBox, QListWidget, QTextEdit { color: #f0f0f0; }
-                QGroupBox { border: 1px solid #3a3d46; border-radius: 6px; margin-top: 12px; }
+                QMainWindow { background: #1c1f24; color: #e8eaf0; }
+                QLabel, QGroupBox, QListWidget, QTextEdit, QCheckBox, QRadioButton { color: #e8eaf0; }
+                QToolTip { color: #e8eaf0; background: #2b2f36; border: 1px solid #3d4452; }
+
+                QGroupBox { border: 1px solid #343a46; border-radius: 6px; margin-top: 12px; }
                 QGroupBox::title { subcontrol-origin: margin; left: 9px; padding: 0 3px; }
-                QPushButton { margin: 2px; background: qlineargradient(x1:0, y1:0, x2:0,y2:1, stop:0 #555555, stop:1 #333333); border: 1px solid #3a3d46; padding: 4px 4px; border-radius: 4px; color: #E0E0E0; }
-                QPushButton:hover { background: #3a3f4d; }
-                QListWidget { background: #2b2f3a; border: 1px solid #3a3d46; }
-                QTextEdit { background: #111217; border: 1px solid #3a3d46; }
-                QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox { background: #2b2f3a; border: 1px solid #3a3d46; color: #f0f0f0; padding: 4px; }
-                QProgressBar { background: #2b2f3a; border: 1px solid #3a3d46; border-radius: 3px; text-align: center; color: #f0f0f0; }
+
+                QPushButton {
+                    margin: 2px; background: #2b2f36; border: 1px solid #3d4452;
+                    padding: 6px 10px; border-radius: 4px; color: #e8eaf0;
+                }
+                QPushButton:hover { background: #3a404a; }
+                QPushButton:pressed { background: #242932; }
+                QPushButton:disabled { color: #8a8f99; background: #242932; }
+
+                QListWidget, QTextEdit { background: #1f232a; border: 1px solid #3d4452; }
+                QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
+                    background: #252a32; border: 1px solid #3d4452; color: #e8eaf0; padding: 4px;
+                    selection-background-color: #4c8bf5; selection-color: #ffffff;
+                }
+                QComboBox::drop-down { border-left: 1px solid #3d4452; }
+                QComboBox QAbstractItemView {
+                    background: #252a32; color: #e8eaf0; selection-background-color: #4c8bf5; selection-color: #ffffff;
+                    border: 1px solid #3d4452;
+                }
+
+                QTabWidget::pane { border: 1px solid #343a46; }
+                QTabBar::tab { background: #2a2f36; color: #e8eaf0; padding: 6px 12px; border: 1px solid #343a46; }
+                QTabBar::tab:selected { background: #3a404a; }
+
+                QProgressBar { background: #252a32; border: 1px solid #3d4452; border-radius: 3px; text-align: center; color: #e8eaf0; }
                 QProgressBar::chunk { background-color: #4c8bf5; }
-                
+
                 QPushButton#RunButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #0D0D0D, stop:1 #1B5E20);
-                    color: #FFFFFF;
-                    border: 1px solid #2E7D32;
-                    }
-                QPushButton#RunButton:hover {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #1B5E20, stop:1 #2E7D32);
-                    }
+                    background: #1f7a3f; color: #ffffff; border: 1px solid #2e9f55;
+                }
+                QPushButton#RunButton:hover { background: #24924b; }
                 QPushButton#CancelButton {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #0D0D0D, stop:1 #7F0000); 
-                    color: #FFFFFF;
-                    border: 1px solid #B71C1C;
-                    }
-                QPushButton#CancelButton:hover {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #7F0000, stop:1 #B71C1C);
-                    }
-                """)
+                    background: #b3261e; color: #ffffff; border: 1px solid #cf3b32;
+                }
+                QPushButton#CancelButton:hover { background: #cf3b32; }
+            """)
             self.btn_theme.setText("🌞")  # Sun icon
         else:
             self.setStyleSheet("""
-                QMainWindow { background: #f8f8f8; color: #222; }
-                QLabel, QGroupBox, QListWidget, QTextEdit { color: #222; }
-                QGroupBox { border: 1px solid #ccc; border-radius: 6px; margin-top: 12px; }
+                QMainWindow { background: #f7f7f9; color: #1b1f24; }
+                QLabel, QGroupBox, QListWidget, QTextEdit, QCheckBox, QRadioButton { color: #1b1f24; }
+                QToolTip { color: #1b1f24; background: #ffffff; border: 1px solid #c9cfd8; }
+
+                QGroupBox { border: 1px solid #c9cfd8; border-radius: 6px; margin-top: 12px; }
                 QGroupBox::title { subcontrol-origin: margin; left: 9px; padding: 0 3px; }
-                QPushButton { margin: 2px; background: qlineargradient(x1:0, y1:0, x2:0,y2:1, stop:0 #F5F5F5, stop:1 #ADADAD); border: 1px solid #ccc; padding: 4px 4px; border-radius: 4px; }
-                QPushButton:hover { background: #eaeaea; }
-                QListWidget { background: #fff; border: 1px solid #ccc; }
-                QTextEdit { background: #f4f4f4; border: 1px solid #ccc; }
-                QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox { background: #fff; border: 1px solid #ccc; color: #222; padding: 4px; }
-                QProgressBar { background: #fff; border: 1px solid #ccc; border-radius: 3px; text-align: center; color: #222; }
-                QProgressBar::chunk { background-color: #4c8bf5; }
-                
+
+                QPushButton {
+                    margin: 2px; background: #ffffff; border: 1px solid #c9cfd8;
+                    padding: 6px 10px; border-radius: 4px; color: #1b1f24;
+                }
+                QPushButton:hover { background: #eef2f7; }
+                QPushButton:pressed { background: #e2e8f0; }
+                QPushButton:disabled { color: #8a8f99; background: #f0f2f5; }
+
+                QListWidget, QTextEdit { background: #ffffff; border: 1px solid #c9cfd8; }
+                QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
+                    background: #ffffff; border: 1px solid #c9cfd8; color: #1b1f24; padding: 4px;
+                    selection-background-color: #2563eb; selection-color: #ffffff;
+                }
+                QComboBox::drop-down { border-left: 1px solid #c9cfd8; }
+                QComboBox QAbstractItemView {
+                    background: #ffffff; color: #1b1f24; selection-background-color: #2563eb; selection-color: #ffffff;
+                    border: 1px solid #c9cfd8;
+                }
+
+                QTabWidget::pane { border: 1px solid #c9cfd8; }
+                QTabBar::tab { background: #e9edf3; color: #1b1f24; padding: 6px 12px; border: 1px solid #c9cfd8; }
+                QTabBar::tab:selected { background: #ffffff; }
+
+                QProgressBar { background: #ffffff; border: 1px solid #c9cfd8; border-radius: 3px; text-align: center; color: #1b1f24; }
+                QProgressBar::chunk { background-color: #2563eb; }
+
                 QPushButton#RunButton {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #f8fff8, stop:1 #e0ffe0);
-                    color: #222;
-                    border: 1px solid #b2dfdb;
+                    background: #16a34a; color: #ffffff; border: 1px solid #15803d;
                 }
-                QPushButton#RunButton:hover {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #e0ffe0, stop:1 #c8f7c8);
-                }
+                QPushButton#RunButton:hover { background: #15803d; }
                 QPushButton#CancelButton {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #fff8f8, stop:1 #ffe0e0);
-                    color: #222;
-                    border: 1px solid #ef9a9a;
+                    background: #dc2626; color: #ffffff; border: 1px solid #b91c1c;
                 }
-                QPushButton#CancelButton:hover {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #ffe0e0, stop:1 #ffcccc);
-                }
-                """)
+                QPushButton#CancelButton:hover { background: #b91c1c; }
+            """)
             self.btn_theme.setText("🌙")  # Moon icon
 
     def toggle_theme(self):
@@ -578,17 +596,10 @@ class MainWindow(QMainWindow):
         msg.setIcon(icon)
         if self.theme_is_dark:
             msg.setStyleSheet("""
-                QMessageBox {
-                    background-color: #232323;
-                    color: #f0f0f0;
-                }
-                QLabel {
-                    color: #f0f0f0;
-                }
-                QPushButton {
-                    background-color: #444;
-                    color: #f0f0f0;
-                }
+                QMessageBox { background-color: #1c1f24; color: #e8eaf0; }
+                QLabel { color: #e8eaf0; }
+                QPushButton { background-color: #2b2f36; color: #e8eaf0; border: 1px solid #3d4452; }
+                QPushButton:hover { background-color: #3a404a; }
             """)
         msg.exec()
             
@@ -960,10 +971,47 @@ class MainWindow(QMainWindow):
         if self._set_widget_value(target, raw):
             self.set_status("Pasted from Log")
 
+
+class LoadingScreen(QWidget):
+    def __init__(self):
+        super().__init__(None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setFixedSize(420, 140)
+        self.setObjectName("LoadingScreen")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
+
+        self.label = QLabel("Loading Main Runner…", self)
+        self.label.setAlignment(Qt.AlignCenter)
+        self.progress = QProgressBar(self)
+        self.progress.setRange(0, 0)  # busy indicator (animated)
+        self.progress.setTextVisible(False)
+
+        layout.addWidget(self.label)
+        layout.addWidget(self.progress)
+
+        self.setStyleSheet(
+            "#LoadingScreen { background: #1f1f1f; color: #ffffff; border-radius: 10px; }"
+            "QProgressBar { border: 1px solid #3a3a3a; border-radius: 6px; text-align: center; height: 18px; }"
+            "QProgressBar::chunk { background-color: #4caf50; border-radius: 6px; }"
+        )
+
+    def set_text(self, text: str):
+        if text:
+            self.label.setText(text)
+
 def main():
     app = QApplication(sys.argv)
+    splash = LoadingScreen()
+    splash.show()
+    app.processEvents()
+
+    splash.set_text("Initializing UI…")
     w = MainWindow()
+    splash.set_text("Finalizing…")
     w.show()
+    QTimer.singleShot(0, splash.close)
     sys.exit(app.exec())
 
 if __name__ == "__main__":

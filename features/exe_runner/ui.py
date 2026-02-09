@@ -5,8 +5,8 @@ import os
 from datetime import datetime
 from typing import Optional
 
-from PySide6.QtCore import Qt, Slot, QSize, QTimer, QEvent
-from PySide6.QtGui import QIcon, QTextCursor, QTextCharFormat, QColor
+from PySide6.QtCore import Qt, Slot, QSize, QTimer, QEvent, QUrl
+from PySide6.QtGui import QIcon, QTextCursor, QTextCharFormat, QColor, QDesktopServices
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
     QComboBox, QTextEdit, QGroupBox, QFileDialog, QMessageBox, QCheckBox
@@ -147,6 +147,11 @@ class ExeRunnerPanel(QWidget):
         self.btn_clear_output.setFixedWidth(80)
         self.btn_clear_output.clicked.connect(self._on_clear_output)
         options_layout.addWidget(self.btn_clear_output)
+        self.btn_open_log_folder = QPushButton("Open Log Folder")
+        self.btn_open_log_folder.setFixedWidth(140)
+        self.btn_open_log_folder.clicked.connect(self._on_open_log_output_folder)
+        self.btn_open_log_folder.setEnabled(False)
+        options_layout.addWidget(self.btn_open_log_folder)
         options_layout.addStretch()
         output_layout.addLayout(options_layout)
         
@@ -327,6 +332,7 @@ class ExeRunnerPanel(QWidget):
     @Slot()
     def _on_run(self):
         """Validate and start the process."""
+        self.btn_open_log_folder.setEnabled(False)
         # Validate log file
         log_file = self.txt_log_file.text().strip()
         is_valid, warning = ExeRunnerController.validate_log_file(log_file)
@@ -416,6 +422,8 @@ class ExeRunnerPanel(QWidget):
             self._set_status("Completed successfully")
         else:
             self._set_status(f"Completed with code {exit_code}")
+
+        self._update_open_log_folder_button()
     
     @Slot(str)
     def _on_process_error(self, error_msg: str):
@@ -436,6 +444,7 @@ class ExeRunnerPanel(QWidget):
         self.combo_exe.setEnabled(True if self.selected_exe != "(no .exe files found)" else False)
         self.btn_log_browse.setEnabled(True)
         self.txt_log_file.setEnabled(True)
+        self._update_open_log_folder_button()
     
     # ===== Slot: Clear output =====
     @Slot()
@@ -448,6 +457,64 @@ class ExeRunnerPanel(QWidget):
     def _set_status(self, text: str):
         """Update status label."""
         self.lbl_status.setText(text)
+
+    def _get_log_base_dir(self) -> Optional[str]:
+        log_path = self.txt_log_file.text().strip()
+        if not log_path:
+            return None
+
+        if os.path.isabs(log_path):
+            base_dir = os.path.dirname(log_path)
+            return base_dir if os.path.isdir(base_dir) else None
+
+        if not self.root_path or not self.selected_version:
+            return None
+
+        base_dir = ExeRunnerController.get_working_directory(
+            self.root_path,
+            self.selected_version
+        )
+        return base_dir if os.path.isdir(base_dir) else None
+
+    def _find_log_output_folder(self) -> Optional[str]:
+        log_path = self.txt_log_file.text().strip()
+        if not log_path:
+            return None
+
+        base_dir = self._get_log_base_dir()
+        if not base_dir:
+            return None
+
+        log_name = os.path.basename(log_path)
+        if not log_name:
+            return None
+
+        name_no_ext = os.path.splitext(log_name)[0]
+        candidates = [
+            os.path.join(base_dir, name_no_ext),
+            os.path.join(base_dir, log_name),
+        ]
+        for folder in candidates:
+            if os.path.isdir(folder):
+                return folder
+        return None
+
+    def _update_open_log_folder_button(self):
+        folder = self._find_log_output_folder()
+        self.btn_open_log_folder.setEnabled(bool(folder))
+
+    @Slot()
+    def _on_open_log_output_folder(self):
+        folder = self._find_log_output_folder()
+        if not folder:
+            QMessageBox.information(
+                self,
+                "Open Log Folder",
+                "Log output folder not found yet. Run the EXE first."
+            )
+            return
+
+        QDesktopServices.openUrl(QUrl.fromLocalFile(folder))
 
 class ExeRunnerTab(QWidget):
     """Main EXE Runner tab with dual side-by-side panels."""
