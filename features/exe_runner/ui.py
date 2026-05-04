@@ -2,10 +2,11 @@
 UI widgets and layout for EXE Runner tab.
 """
 import os
+import shutil
 from datetime import datetime
 from typing import Optional
 
-from PySide6.QtCore import Qt, Slot, QSize, QTimer, QEvent, QUrl
+from PySide6.QtCore import Qt, Slot, QSize, QTimer, QEvent, QUrl, QProcess
 from PySide6.QtGui import QIcon, QTextCursor, QTextCharFormat, QColor, QDesktopServices
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
@@ -41,6 +42,9 @@ class ExeRunnerPanel(QWidget):
         self.runner.output_received.connect(self._on_process_output)
         self.runner.finished.connect(self._on_process_finished)
         self.runner.error_occurred.connect(self._on_process_error)
+
+        self._matlab_proc: Optional[QProcess] = None
+        self._matlab_running = False
         
         self._init_ui()
     
@@ -50,6 +54,7 @@ class ExeRunnerPanel(QWidget):
         self.lbl_root.setText(os.path.basename(path) if path else "No folder selected")
         self.txt_version_search.clear()
         self._refresh_versions()
+        self._update_matlab_button_state()
     
     def _init_ui(self):
         """Build the UI layout for this panel."""
@@ -104,6 +109,7 @@ class ExeRunnerPanel(QWidget):
         self.txt_log_file.setPlaceholderText("e.g., test.log or full path")
         self.txt_log_file.setAcceptDrops(True)
         self.txt_log_file.installEventFilter(self)
+        self.txt_log_file.textChanged.connect(self._update_matlab_button_state)
         self.log_box.setAcceptDrops(True)
         self.log_box.installEventFilter(self)
         self.btn_log_browse = QPushButton("Browse…")
@@ -152,6 +158,11 @@ class ExeRunnerPanel(QWidget):
         self.btn_open_log_folder.clicked.connect(self._on_open_log_output_folder)
         self.btn_open_log_folder.setEnabled(False)
         options_layout.addWidget(self.btn_open_log_folder)
+        self.btn_run_matlab_pop = QPushButton("Run MATLAB Pop")
+        self.btn_run_matlab_pop.setFixedWidth(150)
+        self.btn_run_matlab_pop.clicked.connect(self._on_run_matlab_pop)
+        self.btn_run_matlab_pop.setEnabled(False)
+        options_layout.addWidget(self.btn_run_matlab_pop)
         options_layout.addStretch()
         output_layout.addLayout(options_layout)
         
@@ -173,6 +184,7 @@ class ExeRunnerPanel(QWidget):
         
         self.setLayout(main_layout)
         self._update_run_button_state()
+        self._update_matlab_button_state()
     
 
     
@@ -274,6 +286,7 @@ class ExeRunnerPanel(QWidget):
             self.combo_exe.clear()
             self.selected_version = None
             self._update_run_button_state()
+            self._update_matlab_button_state()
             return
         
         self.selected_version = text
@@ -296,6 +309,7 @@ class ExeRunnerPanel(QWidget):
         
         self.combo_exe.blockSignals(False)
         self._update_run_button_state()
+        self._update_matlab_button_state()
     
     # ===== Slot: EXE changed =====
     @Slot(str)
@@ -324,7 +338,8 @@ class ExeRunnerPanel(QWidget):
             self.selected_version and
             self.selected_exe and
             self.selected_exe != "(no .exe files found)" and
-            not self.runner.is_running
+            not self.runner.is_running and
+            not self._matlab_running
         )
         self.btn_run.setEnabled(can_run)
     
@@ -333,6 +348,7 @@ class ExeRunnerPanel(QWidget):
     def _on_run(self):
         """Validate and start the process."""
         self.btn_open_log_folder.setEnabled(False)
+        self.btn_run_matlab_pop.setEnabled(False)
         # Validate log file
         log_file = self.txt_log_file.text().strip()
         is_valid, warning = ExeRunnerController.validate_log_file(log_file)
@@ -380,6 +396,7 @@ class ExeRunnerPanel(QWidget):
         self.combo_exe.setEnabled(False)
         self.btn_log_browse.setEnabled(False)
         self.txt_log_file.setEnabled(False)
+        self.btn_run_matlab_pop.setEnabled(False)
         self._set_status("Running...")
     
     @Slot(str)
@@ -424,6 +441,7 @@ class ExeRunnerPanel(QWidget):
             self._set_status(f"Completed with code {exit_code}")
 
         self._update_open_log_folder_button()
+        self._update_matlab_button_state()
     
     @Slot(str)
     def _on_process_error(self, error_msg: str):
@@ -445,6 +463,7 @@ class ExeRunnerPanel(QWidget):
         self.btn_log_browse.setEnabled(True)
         self.txt_log_file.setEnabled(True)
         self._update_open_log_folder_button()
+        self._update_matlab_button_state()
     
     # ===== Slot: Clear output =====
     @Slot()
@@ -457,6 +476,23 @@ class ExeRunnerPanel(QWidget):
     def _set_status(self, text: str):
         """Update status label."""
         self.lbl_status.setText(text)
+
+    def _resolve_log_file_path(self) -> Optional[str]:
+        log_path = self.txt_log_file.text().strip()
+        if not log_path:
+            return None
+
+        if os.path.isabs(log_path):
+            return log_path
+
+        if not self.root_path or not self.selected_version:
+            return None
+
+        working_dir = ExeRunnerController.get_working_directory(
+            self.root_path,
+            self.selected_version
+        )
+        return os.path.join(working_dir, log_path) if working_dir else None
 
     def _get_log_base_dir(self) -> Optional[str]:
         log_path = self.txt_log_file.text().strip()
@@ -502,6 +538,115 @@ class ExeRunnerPanel(QWidget):
     def _update_open_log_folder_button(self):
         folder = self._find_log_output_folder()
         self.btn_open_log_folder.setEnabled(bool(folder))
+
+    def _update_matlab_button_state(self):
+        log_full_path = self._resolve_log_file_path()
+        can_run = bool(
+            log_full_path and
+            os.path.isfile(log_full_path) and
+            not self.runner.is_running and
+            not self._matlab_running
+        )
+        self.btn_run_matlab_pop.setEnabled(can_run)
+
+    @Slot()
+    def _on_run_matlab_pop(self):
+        log_full_path = self._resolve_log_file_path()
+        if not log_full_path or not os.path.isfile(log_full_path):
+            QMessageBox.warning(
+                self,
+                "Log File Not Found",
+                "Log file not found. Run the EXE first or select a valid log file."
+            )
+            return
+
+        if self._matlab_running:
+            return
+
+        try:
+            import matlab.engine
+        except Exception:
+            QMessageBox.warning(
+                self,
+                "MATLAB Engine",
+                "MATLAB Engine for Python is not installed or not available."
+            )
+            return
+
+        sessions = matlab.engine.find_matlab()
+        if not sessions:
+            QMessageBox.warning(
+                self,
+                "MATLAB Engine",
+                "No shared MATLAB session found. In MATLAB, run: matlab.engine.shareEngine"
+            )
+            return
+
+        log_base_path = os.path.splitext(log_full_path)[0]
+        if not log_base_path.endswith("\\"):
+            log_base_path += "\\"
+
+        self._matlab_running = True
+        self._set_status("Running MATLAB pop (shared session)...")
+        self._update_run_button_state()
+        self._update_matlab_button_state()
+
+        try:
+            eng = matlab.engine.connect_matlab(sessions[0])
+
+            eeglab_path = os.environ.get("EEGLAB_PATH") or os.environ.get("MATLAB_POP_PATH")
+            if eeglab_path:
+                eng.addpath(eng.genpath(eeglab_path), nargout=0)
+
+            if eng.exist("pop", "file") != 2:
+                raise RuntimeError("pop not found on MATLAB path")
+
+            eng.pop(log_base_path, nargout=0)
+            self._set_status("MATLAB pop finished")
+        except Exception as exc:
+            self.txt_output.append(f"\n[MATLAB ERROR] {exc}\n")
+            self._set_status("MATLAB pop failed")
+        finally:
+            self._matlab_running = False
+            self._update_run_button_state()
+            self._update_matlab_button_state()
+
+    @Slot()
+    def _on_matlab_output(self):
+        if not self._matlab_proc:
+            return
+        data = self._matlab_proc.readAllStandardOutput().data().decode(errors="replace")
+        if not data:
+            return
+
+        cursor = self.txt_output.textCursor()
+        cursor.movePosition(QTextCursor.End)
+
+        for line in data.splitlines(True):
+            fmt = QTextCharFormat()
+            if self.chk_timestamps.isChecked():
+                timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                cursor.insertText(f"[{timestamp}] ", fmt)
+            cursor.insertText(f"[MATLAB] {line}", fmt)
+
+        self.txt_output.setTextCursor(cursor)
+        if self.chk_autoscroll.isChecked():
+            self.txt_output.ensureCursorVisible()
+
+    @Slot(int, int)
+    def _on_matlab_finished(self, exit_code: int, exit_status: int):
+        self._matlab_running = False
+        self._set_status(f"MATLAB pop finished (code {exit_code})")
+        self._update_run_button_state()
+        self._update_matlab_button_state()
+
+    @Slot()
+    def _on_matlab_error(self, error: int):
+        self._matlab_running = False
+        self.txt_output.append(f"\n[MATLAB ERROR] Process error code: {error}\n")
+        self._set_status("MATLAB pop failed")
+        self._update_run_button_state()
+        self._update_matlab_button_state()
 
     @Slot()
     def _on_open_log_output_folder(self):

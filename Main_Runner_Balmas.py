@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from features.exe_runner import ExeRunnerTab
+from features.compare import CompareTab
 
 PYTHON = sys.executable  # use same interpreter
 
@@ -438,6 +439,10 @@ class MainWindow(QMainWindow):
         self.exe_runner_tab = ExeRunnerTab(self)
         self.tabs.addTab(self.exe_runner_tab, "EXE Runner")
 
+        # ===== Tab 3: Compare (MAT file comparison) =====
+        self.compare_tab = CompareTab(self)
+        self.tabs.addTab(self.compare_tab, "Compare")
+
         self.current_script: Optional[Dict[str, Any]] = None
         self.log_file_path: Optional[str] = None
         self.proc = None  # QProcess instance
@@ -546,6 +551,9 @@ class MainWindow(QMainWindow):
         # Propagate theme to EXE Runner tab
         if hasattr(self, "exe_runner_tab"):
             self.exe_runner_tab.set_theme_dark(self.theme_is_dark)
+        # Propagate theme to Compare tab
+        if hasattr(self, "compare_tab"):
+            self.compare_tab.set_theme_dark(self.theme_is_dark)
 
     def eventFilter(self, obj, event):
         targets = (self.file_box, self.lbl_log, self.log_mode, getattr(self, "btn_browse", None))
